@@ -3,82 +3,107 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crops, Ecoregions & ENSO · oscillation.earth</title>
+<title>Oscillation Nation · El Niño and Canadian farmland</title>
 <link href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css" rel="stylesheet">
 <!-- Porkbun caches .css/.js for 30 days: bump ?v= on every deploy that changes them -->
-<link href="style.css?v=5" rel="stylesheet">
+<link href="style.css?v=10" rel="stylesheet">
 </head>
 <body>
 <div id="map"></div>
 
-<aside id="panel">
+<aside id="panel" class="card">
   <header>
-    <h1>Crops of Canada</h1>
-    <button id="collapse" aria-label="Collapse panel">–</button>
+    <h1>Oscillation Nation</h1>
+    <button class="collapse" data-target="panel" aria-label="Collapse panel">–</button>
   </header>
   <div class="body">
-    <p class="lede">Satellite crop map for each year (AAFC Annual Crop Inventory) on top of Canada's ecoregions, alongside NOAA's El Niño index.</p>
-
-    <section class="year">
-      <div class="year-row">
-        <button id="play" aria-label="Play through years">▶</button>
-        <output id="year-label">2025</output>
+    <section class="time">
+      <div class="time-row">
+        <button id="play" aria-label="Play through months">▶</button>
+        <output id="month-label">–</output>
         <span id="enso-badge" class="badge"></span>
       </div>
-      <input id="year" type="range" min="2009" max="2025" step="1" value="2025" aria-label="Year">
-      <div class="ticks"><span id="ymin">2009</span><span id="ymax">2025</span></div>
-    </section>
-
-    <section>
-      <h2>El Niño / La Niña (ONI)</h2>
-      <svg id="oni-chart" viewBox="0 0 300 96" role="img" aria-label="Oceanic Niño Index by season"></svg>
+      <svg id="oni-chart" viewBox="0 0 300 70" preserveAspectRatio="none" role="img" aria-label="Oceanic Niño Index by month"></svg>
+      <div id="enso-strip" aria-hidden="true"></div>
+      <input id="month" type="range" min="0" max="0" step="1" value="0" aria-label="Month">
+      <div class="ticks"><span id="tmin"></span><span id="tmax"></span></div>
+      <div class="legend-row">
+        <span><i class="sw nino"></i>El Niño</span><span><i class="sw neutral"></i>Neutral</span><span><i class="sw nina"></i>La Niña</span>
+      </div>
       <p id="oni-text" class="small"></p>
     </section>
 
     <section>
-      <h2>Precipitation</h2>
-      <label class="check"><input id="precip-on" type="checkbox"> Ecoregion anomaly vs 1991–2020</label>
-      <div id="precip-opts" hidden>
-        <select id="precip-season" aria-label="Season">
-          <option value="gs">Growing season (May–Sep)</option>
-          <option value="djf">Winter (Dec–Feb)</option>
-        </select>
-        <div class="ramp"><span>−50%</span><i></i><span>+50%</span></div>
-        <div class="ramp-labels"><span>drier</span><span>normal</span><span>wetter</span></div>
+      <h2>Datasets</h2>
+
+      <div class="layer">
+        <label class="check"><input id="lyr-climate" type="checkbox" checked> <b>NASA POWER climate</b></label>
+        <div class="opts" data-for="lyr-climate">
+          <select id="climate-var" aria-label="Climate variable"></select>
+          <select id="climate-mode" aria-label="Show">
+            <option value="value">Monthly value</option>
+            <option value="anom">Difference from 1991–2020 normal</option>
+          </select>
+          <div class="ramp" id="climate-ramp"></div>
+        </div>
       </div>
-      <p id="precip-text" class="small"></p>
-    </section>
 
-    <section>
-      <h2>Crops shown</h2>
-      <div id="groups"></div>
-    </section>
+      <div class="layer">
+        <label class="check"><input id="lyr-soil" type="checkbox"> <b>Soil</b> <span class="muted">(farmland only)</span></label>
+        <div class="opts" data-for="lyr-soil">
+          <select id="soil-var" aria-label="Soil property"></select>
+          <div class="ramp" id="soil-ramp"></div>
+        </div>
+      </div>
 
-    <section>
-      <h2>Ecoregions</h2>
-      <label class="check"><input id="eco-lines" type="checkbox" checked> Boundaries</label>
-      <label class="check"><input id="eco-fill" type="checkbox"> Colour by ecozone</label>
-      <ul id="zones" hidden></ul>
+      <div class="layer">
+        <label class="check"><input id="lyr-crops" type="checkbox"> <b>AAFC crops planted</b></label>
+        <div class="opts" data-for="lyr-crops">
+          <p class="small" id="crops-text"></p>
+          <div id="crop-legend" class="cats"></div>
+        </div>
+      </div>
+
+      <div class="layer">
+        <label class="check"><input id="lyr-lines" type="checkbox" checked> <b>Ecodistrict boundaries</b></label>
+      </div>
     </section>
 
     <p class="src">
-      Crops: <a href="https://agriculture.canada.ca/imagery-images/rest/services/annual_crop_inventory" target="_blank" rel="noopener">AAFC Annual Crop Inventory</a> (30 m).
-      Ecoregions: AAFC National Ecological Framework v2.2. Both under the
-      <a href="https://open.canada.ca/en/open-government-licence-canada" target="_blank" rel="noopener">Open Government Licence – Canada</a>.
-      ENSO: <a href="https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php" target="_blank" rel="noopener">NOAA CPC Oceanic Niño Index</a>.
-      Precipitation: <a href="https://power.larc.nasa.gov/" target="_blank" rel="noopener">NASA POWER</a> (MERRA-2).
+      Ecodistricts: AAFC National Ecological Framework v2.2.
+      Soil: AAFC <a href="https://sis.agr.gc.ca/cansis/nsdb/slc/v3.2/index.html" target="_blank" rel="noopener">Soil Landscapes of Canada v3.2</a>.
+      Crops: <a href="https://agriculture.canada.ca/imagery-images/rest/services/annual_crop_inventory" target="_blank" rel="noopener">AAFC Annual Crop Inventory</a>.
+      All under the <a href="https://open.canada.ca/en/open-government-licence-canada" target="_blank" rel="noopener">Open Government Licence – Canada</a>.
+      Climate: <a href="https://power.larc.nasa.gov/" target="_blank" rel="noopener">NASA POWER</a>.
+      ENSO: <a href="https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php" target="_blank" rel="noopener">NOAA CPC ONI</a>.
+      Every dataset is averaged per ecodistrict.
     </p>
   </div>
 </aside>
 
-<section id="point" hidden>
-  <button id="close-point" aria-label="Close">×</button>
-  <div id="point-content"></div>
-</section>
+<aside id="sim" class="card">
+  <header>
+    <h1>Places like yours</h1>
+    <button class="collapse" data-target="sim" aria-label="Collapse panel">–</button>
+  </header>
+  <div class="body">
+    <label class="field">
+      <span>Your ecodistrict</span>
+      <input id="sim-search" list="sim-list" placeholder="Type a name or number, or click the map" autocomplete="off">
+      <datalist id="sim-list"></datalist>
+    </label>
+    <div id="sim-you"></div>
+    <div id="sim-results"></div>
+    <p class="small" id="sim-note">
+      Compares every climate variable for the month and the soil with every other farmland ecodistrict in the same
+      calendar month of other years. 100 = identical; a random pair scores about 2.
+    </p>
+  </div>
+</aside>
 
-<div id="hint">Click anywhere on farmland to see what was grown there each year.</div>
+<div id="tip" hidden></div>
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-<script src="app.js?v=5"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>

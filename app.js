@@ -50,6 +50,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const state = {
   t: 0, y0: 1981, n: 0,
   climateVar: 'T2M', climateMode: 'value', soilVar: 'awhc',
+  yieldCrop: 'WHTSPG', yieldMode: 'value', yield: null, yieldIdx: {}, yieldMeans: {}, yieldDomains: {},
   meta: null, eco: null, ids: [], rowOf: {}, bins: {}, normals: {}, domains: {},
   oni: [], enso: [], classes: {},
   simMeta: null, simCache: {}, sel: null, matches: [], hover: null,
@@ -83,12 +84,20 @@ const dataReady = Promise.all([
   getJSON('data/climate/meta.json'),
   getJSON('data/aci_classes.json'),
   getJSON('data/similarity/meta.json').catch(() => null),
+  getJSON('data/yield.json').catch(() => null),
 ]);
 
-const uiReady = dataReady.then(async ([oni, eco, meta, aci, simMeta]) => {
+const uiReady = dataReady.then(async ([oni, eco, meta, aci, simMeta, yieldData]) => {
   state.eco = eco;
   state.meta = meta;
   state.simMeta = simMeta;
+  state.yield = yieldData;
+  if (yieldData) {
+    yieldData.crops.forEach(([code], i) => { state.yieldIdx[code] = i; });
+    if (!(state.yieldCrop in state.yieldIdx)) state.yieldCrop = yieldData.crops[0][0];
+    const first = yieldData.d[Object.keys(yieldData.d)[0]];
+    yieldData.y1 = yieldData.y0 + (first ? first[0].length - 1 : 0);
+  }
   state.classes = aci.classes;
   state.ids = meta.ids;
   meta.ids.forEach((id, i) => { state.rowOf[id] = i; });
@@ -125,6 +134,8 @@ map.on('load', async () => {
     paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0.8 } }, firstLabel);
   map.addLayer({ id: 'climate-fill', type: 'fill', source: 'ed',
     paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0.72 } }, firstLabel);
+  map.addLayer({ id: 'yield-fill', type: 'fill', source: 'ed', layout: { visibility: 'none' },
+    paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0.78 } }, firstLabel);
   map.addLayer({ id: 'hit', type: 'fill', source: 'ed', paint: { 'fill-color': '#000', 'fill-opacity': 0 } }, firstLabel);
   map.addLayer({ id: 'lines', type: 'line', source: 'ed',
     paint: { 'line-color': '#34413a', 'line-width': ['interpolate', ['linear'], ['zoom'], 3, 0.2, 8, 1], 'line-opacity': 0.45 } }, firstLabel);
@@ -361,6 +372,7 @@ const mapReady = () => map.getSource('ed') && map.isSourceLoaded('ed');
 function paintAll() {
   paintClimate();
   paintCrops();
+  paintYield();
 }
 
 function paintClimate() {
@@ -430,14 +442,95 @@ function paintCrops() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Crop yield (per ecodistrict and year; compared with each district's own average)
+// ---------------------------------------------------------------------------
+// year with yield data that goes with the slider month (clamped to the record)
+function yieldYear() {
+  const y = state.yield;
+  return y ? Math.max(y.y0, Math.min(y.y1, tYear(state.t))) : null;
+}
+
+// crop series for one ecodistrict, or null
+function yieldSeries(id, code = state.yieldCrop) {
+  const rows = state.yield?.d[id];
+  const i = state.yieldIdx[code];
+  return rows && i != null ? rows[i] : null;
+}
+
+// each ecodistrict's long-term mean yield for a crop (the "average" we compare years against)
+function yieldMean(id, code) {
+  const key = `${id}.${code}`;
+  if (key in state.yieldMeans) return state.yieldMeans[key];
+  const s = yieldSeries(id, code);
+  let sum = 0, c = 0;
+  if (s) for (const v of s) if (v != null) { sum += v; c++; }
+  return (state.yieldMeans[key] = c ? sum / c : null);
+}
+
+// value for a year: raw kg/ha, or the % above/below that district's average
+function yieldValue(id, year, code = state.yieldCrop, mode = state.yieldMode) {
+  const s = yieldSeries(id, code);
+  if (!s) return null;
+  const v = s[year - state.yield.y0];
+  if (v == null || mode === 'value') return v;
+  const m = yieldMean(id, code);
+  return m ? (v - m) / m * 100 : null;
+}
+
+// colour range for the picked crop + mode, over every ecodistrict and year, cached
+function yieldDomain(code, mode) {
+  const key = `${code}.${mode}`;
+  if (state.yieldDomains[key]) return state.yieldDomains[key];
+  const vals = [];
+  for (const id of Object.keys(state.yield.d)) {
+    for (let year = state.yield.y0; year <= state.yield.y1; year++) {
+      const v = yieldValue(id, year, code, mode);
+      if (v != null) vals.push(v);
+    }
+  }
+  let dom = [0, 1];
+  if (vals.length) {
+    dom = mode === 'anom'
+      ? (() => { const m = Math.max(1, quantile(vals.map(Math.abs), 0.97)); return [-m, m]; })()
+      : [quantile(vals, 0.02), quantile(vals, 0.98)];
+  }
+  return (state.yieldDomains[key] = dom);
+}
+
+function paintYield() {
+  if (!state.yield) { $('#yield-text').textContent = 'No yield data yet (run scripts/build_yield.py).'; return; }
+  const code = state.yieldCrop, mode = state.yieldMode;
+  const label = state.yield.crops[state.yieldIdx[code]][1];
+  const year = yieldYear();
+  const exact = year === tYear(state.t);
+  const dom = yieldDomain(code, mode);
+  const colors = mode === 'anom' ? RAMPS.anomWet : RAMPS.awhc;
+  $('#yield-ramp').innerHTML = mode === 'anom'
+    ? `<span>${signed(dom[0], 0)}%</span><i style="background:linear-gradient(90deg,${colors.join(',')})"></i><span>${signed(dom[1], 0)}% vs avg</span>`
+    : `<span>${fmt(dom[0], 0)}</span><i style="background:linear-gradient(90deg,${colors.join(',')})"></i><span>${fmt(dom[1], 0)} kg/ha</span>`;
+  $('#yield-text').innerHTML = `<b>${esc(label)}</b> yield for <b>${year}</b>` +
+    `${exact ? '' : ` (nearest year to ${tYear(state.t)}; record is ${state.yield.y0}–${state.yield.y1})`}, ` +
+    (mode === 'anom'
+      ? 'shown as % above (teal) or below (brown) each ecodistrict’s own long-term average.'
+      : 'averaged across the Soil Landscape polygons in each ecodistrict.');
+  if (!mapReady() || !map.getLayer('yield-fill') || !$('#lyr-yield').checked) return;
+  map.setPaintProperty('yield-fill', 'fill-color', rampExpr('y', colors, dom));
+  for (const id of state.ids) {
+    map.setFeatureState({ source: 'ed', id }, { y: yieldValue(id, year) });
+  }
+}
+
 function applyLayers() {
   if (!map.getLayer('climate-fill')) return;
   const vis = (id, on) => map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
   vis('climate-fill', $('#lyr-climate').checked);
   vis('soil-fill', $('#lyr-soil').checked);
+  vis('yield-fill', $('#lyr-yield').checked);
   vis('crops', $('#lyr-crops').checked);
   vis('lines', $('#lyr-lines').checked);
   if ($('#lyr-soil').checked) paintSoil();
+  if ($('#lyr-yield').checked) paintYield();
   for (const el of document.querySelectorAll('.opts')) el.hidden = !$('#' + el.dataset.for).checked;
 }
 
@@ -470,6 +563,16 @@ function showTip(id, pt) {
     if (c) {
       h += `<div>Cropland ${fmt(c.crop, 0)}% of land, pasture ${fmt(c.pasture, 0)}%</div>`;
       if (c.crop > 0) h += `<div>Top crop: <b>${esc(state.classes[c.top]?.[0] ?? '–')}</b> · ${esc(CROP_GROUPS[c.groups[0][0]][0])} ${fmt(c.groups[0][1], 0)}% of crops</div>`;
+    }
+  }
+  if ($('#lyr-yield').checked && state.yield) {
+    const year = yieldYear(), code = state.yieldCrop;
+    const label = state.yield.crops[state.yieldIdx[code]][1];
+    const raw = yieldValue(id, year, code, 'value');
+    if (raw != null) {
+      const pct = yieldValue(id, year, code, 'anom');
+      h += `<div>${esc(label)} yield ${year}: <b>${fmt(raw, 0)}</b> kg/ha` +
+        (pct == null ? '' : ` <span class="muted">(${signed(pct, 0)}% vs avg)</span>`) + '</div>';
     }
   }
   const m = state.matches.find((x) => x.id === id);
@@ -635,7 +738,16 @@ function buildUI() {
   // crop legend
   $('#crop-legend').innerHTML = Object.values(CROP_GROUPS).map(([n, c]) => `<span><i class="sw" style="background:${c}"></i>${esc(n)}</span>`).join('');
 
-  for (const id of ['lyr-climate', 'lyr-soil', 'lyr-crops', 'lyr-lines']) {
+  // crop-yield pickers
+  const yc = $('#yield-crop');
+  if (state.yield) {
+    yc.innerHTML = state.yield.crops.map(([code, label]) => `<option value="${code}">${esc(label)}</option>`).join('');
+    yc.value = state.yieldCrop;
+  }
+  yc.addEventListener('change', () => { state.yieldCrop = yc.value; paintYield(); });
+  $('#yield-mode').addEventListener('change', (e) => { state.yieldMode = e.target.value; paintYield(); });
+
+  for (const id of ['lyr-climate', 'lyr-soil', 'lyr-crops', 'lyr-yield', 'lyr-lines']) {
     $('#' + id).addEventListener('change', () => { applyLayers(); if (id === 'lyr-crops') paintCrops(); });
   }
   for (const el of document.querySelectorAll('.opts')) el.hidden = !$('#' + el.dataset.for).checked;

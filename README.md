@@ -22,8 +22,60 @@ As El Niño years come and go, the bubbles shift to show which places your locat
   - *NASA POWER climate* – 15 monthly variables (temperature, precipitation, snow, humidity, solar, wind, evapotranspiration, soil wetness, frost days), as the monthly value or the difference from the 1991–2020 normal.
   - *Soil* – water holding capacity, texture, organic carbon, pH, drainage and dominant soil order from the Soil Landscapes of Canada (farmland only).
   - *AAFC crops planted* – bubbles sized by the share of land in crops for the slider's year, coloured by the largest crop group.
+  - *Crop yield* – estimated yield (kg/ha) per ecodistrict for the slider's year, for 15 major field crops, shown as the raw value *or* as the % above/below that ecodistrict's own long-term average.
   - *Ecodistrict boundaries.*
 - **Places like yours** (right panel). Pick your ecodistrict (type it or click the map). For the slider's month it lists the 10 ecodistricts whose conditions in the same calendar month of another year were most similar, using every climate variable plus soil, and highlights them on the map.
+
+### Factors already on the map
+
+Everything a user can currently see or select, grouped by map layer. This is the "already done" list — add new factors as new entries here (and as new layers/variables in `index.html`, `app.js`, and the data pipeline).
+
+**El Niño timeline** (always on, top-left panel)
+- [x] Oceanic Niño Index (ONI) value per month, Jan 1981 – Dec 2025
+- [x] ENSO phase strip (El Niño / Neutral / La Niña, NOAA's ≥5-season rule)
+
+**NASA POWER climate** (`lyr-climate`) — 15 monthly variables, shown as the raw value *or* the anomaly vs the 1991–2020 normal:
+- [x] Mean temperature (`T2M`, °C)
+- [x] Max temperature (`T2M_MAX`, °C)
+- [x] Min temperature (`T2M_MIN`, °C)
+- [x] Dew point (`T2MDEW`, °C)
+- [x] Precipitation (`PRECIP`, mm)
+- [x] Snowfall, water equiv. (`SNOWFALL`, mm)
+- [x] Snow depth (`SNODP`, cm)
+- [x] Relative humidity (`RH2M`, %)
+- [x] Solar radiation (`SOLAR`, MJ/m²/day)
+- [x] Wind speed (`WS2M`, m/s)
+- [x] Evapotranspiration (`ET`, mm)
+- [x] Surface soil wetness (`GWETTOP`, 0–1)
+- [x] Root-zone soil wetness (`GWETROOT`, 0–1)
+- [x] Profile soil wetness (`GWETPROF`, 0–1)
+- [x] Frost days (`FROST_DAYS`, days)
+
+**Soil** (`lyr-soil`, farmland ecodistricts only) — 8 properties from the Soil Landscapes of Canada:
+- [x] Available water holding capacity, 0–100 cm (`awhc`, mm)
+- [x] Sand, 0–30 cm (`sand`, %)
+- [x] Silt, 0–30 cm (`silt`, %)
+- [x] Clay, 0–30 cm (`clay`, %)
+- [x] Organic carbon, 0–30 cm (`oc`, %)
+- [x] pH (CaCl₂), 0–30 cm (`ph`)
+- [x] Drainage class, 1 very rapid – 7 very poor (`drainage`)
+- [x] Dominant soil order (`order`, categorical)
+
+**AAFC crops planted** (`lyr-crops`)
+- [x] Share of land in crops for the slider's year (bubble size)
+- [x] Largest crop group for that year (bubble colour)
+
+**Crop yield** (`lyr-yield`) — estimated yield per ecodistrict (kg/ha), averaged across the Soil Landscape polygons, for the slider's year. Shown as the raw value *or* the % difference from that ecodistrict's own long-term average. 15 major field crops:
+- [x] Spring wheat (`WHTSPG`), Durum wheat (`WHTDUR`), Winter wheat (`WHTWINT`)
+- [x] Barley (`BARLEY`), Oats (`OATS`)
+- [x] Canola (`CANOLA`), Flaxseed (`FLAXSD`), Sunflower seed (`SUNFLS`)
+- [x] Soybeans (`SOYBNS`), Grain corn (`CORNGR`)
+- [x] Dry peas (`DFPEAS`), Lentils (`LENTIL`)
+- [x] Potatoes (`POTATS`)
+- [x] Hay & fodder (`OHAYFD`), Alfalfa (`ALFALFA`)
+
+**Base layer**
+- [x] Ecodistrict boundaries (`lyr-lines`)
 
 ### Data pipeline
 
@@ -36,6 +88,7 @@ python scripts/fetch_power.py           # NASA POWER monthly climate -> data/cli
 python scripts/fetch_soil.py            # Soil Landscapes of Canada -> data/raw/soil.json (needs `pip install dbfread`)
 python scripts/fetch_crops.py           # AAFC crop inventory per ecodistrict and year -> data/raw/crops.json (~25 min)
 python scripts/build_client_data.py     # merges boundaries, soil and crops -> data/ecodistricts.json
+python scripts/build_yield.py           # SLC crop-yield CSV -> data/yield.json (per ecodistrict/year/crop)
 python scripts/similarity.py            # precomputed matches -> data/similarity/<id>.bin (needs numpy)
 ```
 
@@ -43,6 +96,7 @@ python scripts/similarity.py            # precomputed matches -> data/similarity
 | --- | --- |
 | `data/ecodistricts.min.geojson` | simplified ecodistrict polygons |
 | `data/ecodistricts.json` | per ecodistrict: names, label point, soil, crops by year |
+| `data/yield.json` | per ecodistrict: estimated yield (kg/ha) by crop and year, for 15 major field crops |
 | `data/climate/<VAR>.bin` + `meta.json` | Int16 `[ecodistrict][month]` per climate variable, loaded when picked |
 | `data/similarity/<id>.bin` + `meta.json` | top 10 matches per month for one ecodistrict, loaded when picked |
 | `data/oni.json` | NOAA Oceanic Niño Index |

@@ -6,7 +6,7 @@
 <title>Oscillation Nation · El Niño and Canadian farmland</title>
 <link href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css" rel="stylesheet">
 <!-- Porkbun caches .css/.js for 30 days: bump ?v= on every deploy that changes them -->
-<link href="style.css?v=10" rel="stylesheet">
+<link href="style.css?v=11" rel="stylesheet">
 </head>
 <body>
 <div id="map"></div>
@@ -65,6 +65,19 @@
       </div>
 
       <div class="layer">
+        <label class="check"><input id="lyr-yield" type="checkbox"> <b>Crop yield</b></label>
+        <div class="opts" data-for="lyr-yield">
+          <select id="yield-crop" aria-label="Crop"></select>
+          <select id="yield-mode" aria-label="Show">
+            <option value="value">Yield (kg/ha)</option>
+            <option value="anom">Difference from average</option>
+          </select>
+          <div class="ramp" id="yield-ramp"></div>
+          <p class="small" id="yield-text"></p>
+        </div>
+      </div>
+
+      <div class="layer">
         <label class="check"><input id="lyr-lines" type="checkbox" checked> <b>Ecodistrict boundaries</b></label>
       </div>
     </section>
@@ -104,6 +117,6 @@
 <div id="tip" hidden></div>
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-<script src="app.js?v=10"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>

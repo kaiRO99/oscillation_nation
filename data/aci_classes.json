@@ -1,0 +1,323 @@
+{
+ "years": [
+  2009,
+  2010,
+  2011,
+  2012,
+  2013,
+  2014,
+  2015,
+  2016,
+  2017,
+  2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025
+ ],
+ "classes": {
+  "0": [
+   "Cloud",
+   "#000000"
+  ],
+  "1": [
+   "Water",
+   "#3333ff"
+  ],
+  "2": [
+   "Exposed land/barren",
+   "#996666"
+  ],
+  "3": [
+   "Urban/developed",
+   "#cc6699"
+  ],
+  "4": [
+   "Greenhouses",
+   "#e1e1e1"
+  ],
+  "5": [
+   "Shrubland",
+   "#ffff00"
+  ],
+  "6": [
+   "Forest fire/burnt area",
+   "#666666"
+  ],
+  "7": [
+   "Wetland",
+   "#993399"
+  ],
+  "8": [
+   "Peatland",
+   "#501b50"
+  ],
+  "9": [
+   "Grassland",
+   "#cccc00"
+  ],
+  "10": [
+   "Agriculture (undifferentiated)",
+   "#cc6600"
+  ],
+  "11": [
+   "Cropland",
+   "#ff9933"
+  ],
+  "12": [
+   "Pasture/forages",
+   "#ffcc33"
+  ],
+  "13": [
+   "Too wet to be seeded",
+   "#7899f6"
+  ],
+  "14": [
+   "Fallow",
+   "#ff9900"
+  ],
+  "15": [
+   "Cereals",
+   "#660000"
+  ],
+  "16": [
+   "Barley",
+   "#dae31d"
+  ],
+  "17": [
+   "Other grains",
+   "#99cc00"
+  ],
+  "18": [
+   "Millet",
+   "#d2db25"
+  ],
+  "19": [
+   "Oats",
+   "#d1d52b"
+  ],
+  "20": [
+   "Rye",
+   "#cace32"
+  ],
+  "21": [
+   "Spelt",
+   "#c3c63a"
+  ],
+  "22": [
+   "Triticale",
+   "#b9bc44"
+  ],
+  "23": [
+   "Wheat",
+   "#a7b34d"
+  ],
+  "24": [
+   "Switchgrass",
+   "#b9c64e"
+  ],
+  "25": [
+   "Sorghum",
+   "#999900"
+  ],
+  "26": [
+   "Quinoa",
+   "#e9e2b1"
+  ],
+  "27": [
+   "Winter wheat",
+   "#809769"
+  ],
+  "28": [
+   "Spring wheat",
+   "#92a55b"
+  ],
+  "29": [
+   "Corn for grain",
+   "#ffff99"
+  ],
+  "30": [
+   "Tobacco",
+   "#98887c"
+  ],
+  "31": [
+   "Ginseng",
+   "#799b93"
+  ],
+  "32": [
+   "Oilseeds",
+   "#5ea263"
+  ],
+  "33": [
+   "Borage",
+   "#52ae77"
+  ],
+  "34": [
+   "Camelina",
+   "#41bf7a"
+  ],
+  "35": [
+   "Canola/rapeseed",
+   "#d6ff70"
+  ],
+  "36": [
+   "Flaxseed",
+   "#8c8cff"
+  ],
+  "37": [
+   "Mustard",
+   "#d6cc00"
+  ],
+  "38": [
+   "Safflower",
+   "#ff7f00"
+  ],
+  "39": [
+   "Sunflower",
+   "#315491"
+  ],
+  "40": [
+   "Soybeans",
+   "#cc9933"
+  ],
+  "41": [
+   "Other oilseeds",
+   "#5ea296"
+  ],
+  "42": [
+   "Pulses",
+   "#896e43"
+  ],
+  "43": [
+   "Other pulses",
+   "#996633"
+  ],
+  "44": [
+   "Peas",
+   "#8f6c3d"
+  ],
+  "45": [
+   "Chickpeas",
+   "#b6a472"
+  ],
+  "46": [
+   "Beans",
+   "#82654a"
+  ],
+  "47": [
+   "Fababeans",
+   "#a39069"
+  ],
+  "48": [
+   "Lentils",
+   "#b85900"
+  ],
+  "49": [
+   "Vegetables",
+   "#b74b15"
+  ],
+  "50": [
+   "Tomatoes",
+   "#ff8a8a"
+  ],
+  "51": [
+   "Potatoes",
+   "#ffcccc"
+  ],
+  "52": [
+   "Sugarbeets",
+   "#6f55ca"
+  ],
+  "53": [
+   "Other vegetables",
+   "#ffccff"
+  ],
+  "54": [
+   "Fruits",
+   "#dc5424"
+  ],
+  "55": [
+   "Berries",
+   "#d05a30"
+  ],
+  "56": [
+   "Blueberry",
+   "#d20000"
+  ],
+  "57": [
+   "Cranberry",
+   "#cc0000"
+  ],
+  "58": [
+   "Other berries",
+   "#dc3200"
+  ],
+  "59": [
+   "Orchards",
+   "#ff6666"
+  ],
+  "60": [
+   "Other fruits",
+   "#c5453b"
+  ],
+  "61": [
+   "Vineyards",
+   "#7442bd"
+  ],
+  "62": [
+   "Hops",
+   "#ffcc99"
+  ],
+  "63": [
+   "Sod",
+   "#b5fb05"
+  ],
+  "64": [
+   "Herbs",
+   "#ccff05"
+  ],
+  "65": [
+   "Nursery",
+   "#07f98c"
+  ],
+  "66": [
+   "Buckwheat",
+   "#00ffcc"
+  ],
+  "67": [
+   "Canaryseed",
+   "#cc33cc"
+  ],
+  "68": [
+   "Hemp",
+   "#8e7672"
+  ],
+  "69": [
+   "Vetch",
+   "#b1954f"
+  ],
+  "70": [
+   "Other crops",
+   "#749a66"
+  ],
+  "71": [
+   "Forest (undifferentiated)",
+   "#009900"
+  ],
+  "72": [
+   "Coniferous",
+   "#006600"
+  ],
+  "73": [
+   "Broadleaf",
+   "#00cc00"
+  ],
+  "74": [
+   "Mixedwood",
+   "#cc9900"
+  ]
+ }
+}

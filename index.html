@@ -6,7 +6,7 @@
 <title>Crops, Ecoregions & ENSO · oscillation.earth</title>
 <link href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css" rel="stylesheet">
 <!-- Porkbun caches .css/.js for 30 days: bump ?v= on every deploy that changes them -->
-<link href="style.css?v=4" rel="stylesheet">
+<link href="style.css?v=5" rel="stylesheet">
 </head>
 <body>
 <div id="map"></div>
@@ -36,6 +36,20 @@
     </section>
 
     <section>
+      <h2>Precipitation</h2>
+      <label class="check"><input id="precip-on" type="checkbox"> Ecoregion anomaly vs 1991–2020</label>
+      <div id="precip-opts" hidden>
+        <select id="precip-season" aria-label="Season">
+          <option value="gs">Growing season (May–Sep)</option>
+          <option value="djf">Winter (Dec–Feb)</option>
+        </select>
+        <div class="ramp"><span>−50%</span><i></i><span>+50%</span></div>
+        <div class="ramp-labels"><span>drier</span><span>normal</span><span>wetter</span></div>
+      </div>
+      <p id="precip-text" class="small"></p>
+    </section>
+
+    <section>
       <h2>Crops shown</h2>
       <div id="groups"></div>
     </section>
@@ -52,6 +66,7 @@
       Ecoregions: AAFC National Ecological Framework v2.2. Both under the
       <a href="https://open.canada.ca/en/open-government-licence-canada" target="_blank" rel="noopener">Open Government Licence – Canada</a>.
       ENSO: <a href="https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php" target="_blank" rel="noopener">NOAA CPC Oceanic Niño Index</a>.
+      Precipitation: <a href="https://power.larc.nasa.gov/" target="_blank" rel="noopener">NASA POWER</a> (MERRA-2).
     </p>
   </div>
 </aside>
@@ -64,6 +79,6 @@
 <div id="hint">Click anywhere on farmland to see what was grown there each year.</div>
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

@@ -6,6 +6,9 @@
 const ACI = 'https://agriculture.canada.ca/imagery-images/rest/services/annual_crop_inventory';
 // Lon/lat extent of the crop inventory rasters (from the ImageServer extent)
 const ACI_BOUNDS = [-144.3, 40.4, -49.7, 66.5];
+// Precipitation anomaly colour ramp (% of the 1991-2020 normal), brown = drier, teal = wetter
+const PRECIP_RAMP = [-50, '#8c510a', -25, '#d8b365', 0, '#f6f3ea', 25, '#5ab4ac', 50, '#01665e'];
+const PRECIP_SEASONS = { gs: 'growing season (May–Sep)', djf: 'winter (Dec–Feb)' };
 
 // Ecozone names and colours (ids from the National Ecological Framework)
 const ZONES = {
@@ -35,7 +38,10 @@ const V = new URL(document.currentScript.src).searchParams.get('v') || '0';
 const withV = (path) => `${path}?v=${V}`;
 
 const $ = (s) => document.querySelector(s);
-const state = { year: 2025, years: [], classes: {}, oni: {}, oniList: [], point: null, history: {} };
+const state = {
+  year: 2025, years: [], classes: {}, oni: {}, oniList: [], point: null, history: {},
+  precip: null, precipSeason: 'gs',
+};
 
 // ---------------------------------------------------------------------------
 // Map
@@ -46,7 +52,7 @@ const map = new maplibregl.Map({
   center: [-100, 54],
   zoom: 3.3,
   maxZoom: 15,
-  attributionControl: { compact: true, customAttribution: 'Crops & ecoregions © AAFC (OGL-Canada) · ONI © NOAA CPC' },
+  attributionControl: { compact: true, customAttribution: 'Crops & ecoregions © AAFC (OGL-Canada) · ONI © NOAA CPC · Precipitation: NASA POWER' },
 });
 map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
@@ -54,10 +60,13 @@ map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 const dataReady = Promise.all([
   fetch(withV('data/aci_classes.json')).then((r) => r.json()),
   fetch(withV('data/oni.json')).then((r) => r.json()),
+  // optional until scripts/fetch_precipitation.py has been run
+  fetch(withV('data/precip.json')).then((r) => (r.ok ? r.json() : null)).catch(() => null),
 ]);
 
 // The panel only needs the small data files, so build it straight away, without waiting for the basemap.
-const uiReady = dataReady.then(([aci, oni]) => {
+const uiReady = dataReady.then(([aci, oni, precip]) => {
+  state.precip = precip;
   state.years = aci.years;
   state.classes = aci.classes;
   state.oniList = oni.data;
@@ -101,6 +110,17 @@ map.on('load', async () => {
     paint: { 'raster-opacity': 0.9, 'raster-resampling': 'nearest', 'raster-fade-duration': 150 },
   }, firstLabel);
 
+  // precipitation anomaly per ecoregion, driven by feature-state (see paintPrecip)
+  map.addLayer({
+    id: 'precip-fill', type: 'fill', source: 'ecoregions',
+    layout: { visibility: 'none' },
+    paint: {
+      'fill-color': ['case', ['==', ['typeof', ['feature-state', 'precip']], 'number'],
+        ['interpolate', ['linear'], ['feature-state', 'precip'], ...PRECIP_RAMP], 'rgba(0,0,0,0)'],
+      'fill-opacity': 0.7,
+    },
+  }, firstLabel);
+
   map.addLayer({
     id: 'eco-lines', type: 'line', source: 'ecoregions',
     paint: {
@@ -120,6 +140,7 @@ map.on('load', async () => {
   // apply anything the user changed in the panel before the map finished loading
   // (the crop source above was created from the current year and filters, so it needs no refresh)
   applyEcoToggles();
+  paintPrecip();
   if (!enabledValues().length) map.setLayoutProperty('aci', 'visibility', 'none');
   map.on('click', (e) => openPoint(e.lngLat));
 });
@@ -128,6 +149,7 @@ function applyEcoToggles() {
   if (!map.getLayer('eco-lines')) return;
   map.setLayoutProperty('eco-lines', 'visibility', $('#eco-lines').checked ? 'visible' : 'none');
   map.setLayoutProperty('eco-fill', 'visibility', $('#eco-fill').checked ? 'visible' : 'none');
+  map.setLayoutProperty('precip-fill', 'visibility', $('#precip-on').checked ? 'visible' : 'none');
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +187,36 @@ function refreshCrops() {
   const url = cropTileUrl();
   if (any && src.tiles?.[0] !== url) src.setTiles([url]);
 }
+
+// ---------------------------------------------------------------------------
+// Precipitation
+// ---------------------------------------------------------------------------
+// Ecoregion precipitation for a year: { mm, pct } where pct is the anomaly vs the 1991-2020 normal
+function precipFor(id, year, season = state.precipSeason) {
+  const p = state.precip;
+  const r = p?.eco[id];
+  const mm = r?.[season][year - p.first_year];
+  const norm = r?.norm[season];
+  if (mm == null || !norm) return null;
+  return { mm, pct: (mm / norm - 1) * 100 };
+}
+
+function paintPrecip() {
+  const p = state.precip;
+  if (!p) return;
+  if (map.getSource('ecoregions')) {
+    for (const id of Object.keys(p.eco)) {
+      map.setFeatureState({ source: 'ecoregions', id: Number(id) }, { precip: precipFor(id, state.year)?.pct ?? null });
+    }
+  }
+  const hasYear = state.year >= p.first_year && state.year <= p.last_year;
+  $('#precip-text').textContent = hasYear
+    ? `${state.year} ${PRECIP_SEASONS[state.precipSeason]} total compared with the ${p.normal[0]}–${p.normal[1]} average. ` +
+      'Click an ecoregion for the yearly history.'
+    : `No precipitation data for ${state.year} yet (have ${p.first_year}–${p.last_year}).`;
+}
+
+const pctText = (v) => (v >= 0.5 ? '+' : v <= -0.5 ? '−' : '') + Math.abs(Math.round(v)) + '%';
 
 // ---------------------------------------------------------------------------
 // ENSO helpers
@@ -306,6 +358,21 @@ function buildUI() {
     zl.hidden = !e.target.checked;
   };
 
+  // precipitation
+  if (!state.precip) {
+    $('#precip-on').disabled = true;
+    $('#precip-text').textContent = 'No data/precip.json yet: run python scripts/fetch_precipitation.py.';
+  }
+  $('#precip-on').onchange = (e) => {
+    applyEcoToggles();
+    $('#precip-opts').hidden = !e.target.checked;
+  };
+  $('#precip-season').onchange = (e) => {
+    state.precipSeason = e.target.value;
+    paintPrecip();
+    if (state.point) renderPoint();
+  };
+
   // panels
   $('#collapse').onclick = () => {
     const c = $('#panel').classList.toggle('collapsed');
@@ -342,6 +409,7 @@ function setYear(y) {
     `Threshold ±0.5 °C. Click the chart to jump to a year.`;
   updateOniChart();
   refreshCrops();
+  paintPrecip();
 
   const url = new URL(location.href);
   url.searchParams.set('year', y);
@@ -354,7 +422,7 @@ function setYear(y) {
 // ---------------------------------------------------------------------------
 async function openPoint(lngLat) {
   $('#hint').style.opacity = 0;
-  const eco = map.queryRenderedFeatures(map.project(lngLat), { layers: ['eco-fill', 'eco-lines'] })[0]
+  const eco = map.queryRenderedFeatures(map.project(lngLat), { layers: ['eco-fill', 'precip-fill', 'eco-lines'] })[0]
     || pointInEcoregion(lngLat);
   const token = {};
   state.point = { lngLat, eco, token };
@@ -417,14 +485,22 @@ function renderPoint() {
     if (v === undefined) crop = '<span class="load">…</span>';
     else if (v === 'NoData' || v === 'error' || state.classes[v] == null) crop = '<span class="load">no data</span>';
     else crop = `<span class="sw" style="background:${state.classes[v][1]}"></span>${escapeHtml(state.classes[v][0])}`;
+    const pr = p && state.precip ? precipFor(p.id, y) : null;
+    const prCell = state.precip
+      ? `<td class="pr ${pr && pr.pct >= 0 ? 'wet' : 'dry'}" title="${pr ? Math.round(pr.mm) + ' mm' : ''}">${pr ? pctText(pr.pct) : ''}</td>`
+      : '';
     rows += `<tr data-year="${y}" class="${y === state.year ? 'cur' : ''}"><td>${y}</td><td class="crop">${crop}</td>` +
-      `<td class="oni ${o > 0 ? 'pos' : 'neg'}">${o == null ? '' : sign(o)}</td></tr>`;
+      prCell + `<td class="oni ${o > 0 ? 'pos' : 'neg'}">${o == null ? '' : sign(o)}</td></tr>`;
   }
+  const prHead = state.precip ? '<th style="text-align:right">Precip†</th>' : '';
+  const prNote = state.precip
+    ? ` †Ecoregion ${PRECIP_SEASONS[state.precipSeason]} precipitation vs the ${state.precip.normal[0]}–${state.precip.normal[1]} average (hover for mm).`
+    : '';
   el.innerHTML = '';
   el.append(head);
   el.insertAdjacentHTML('beforeend',
-    `<table><thead><tr><th>Year</th><th>Crop / cover at this point</th><th style="text-align:right">ONI*</th></tr></thead>` +
-    `<tbody>${rows}</tbody></table><p class="small">*Growing-season (May–Sep) ONI. Red = El Niño side, blue = La Niña side. Click a row to show that year.</p>`);
+    `<table><thead><tr><th>Year</th><th>Crop / cover at this point</th>${prHead}<th style="text-align:right">ONI*</th></tr></thead>` +
+    `<tbody>${rows}</tbody></table><p class="small">*Growing-season (May–Sep) ONI. Red = El Niño side, blue = La Niña side. Click a row to show that year.${prNote}</p>`);
   $('#point').hidden = false;
 }
 

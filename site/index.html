@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ecoregions of Canada · oscillation.earth</title>
+<meta name="description" content="Interactive map of Canada's 194 terrestrial ecoregions from the National Ecological Framework.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css" rel="stylesheet">
+<link href="style.css" rel="stylesheet">
+</head>
+<body>
+<div id="map" aria-label="Map of Canadian ecoregions"></div>
+
+<aside id="panel" class="card">
+  <header class="panel-head">
+    <div>
+      <div class="eyebrow">oscillation.earth</div>
+      <h1>Ecoregions of Canada</h1>
+    </div>
+    <button id="collapse" class="icon-btn" aria-label="Collapse panel" title="Collapse">–</button>
+  </header>
+  <div class="panel-body">
+    <p class="lede"><span id="count-regions">194</span> ecoregions across 15 ecozones, from the National Ecological Framework for Canada.</p>
+
+    <div class="search">
+      <input id="search" type="search" placeholder="Search ecoregions…" autocomplete="off" aria-label="Search ecoregions">
+      <ul id="results" role="listbox" hidden></ul>
+    </div>
+
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Color by">
+        <button data-mode="zone" class="on">By ecozone</button>
+        <button data-mode="area">By area</button>
+      </div>
+      <div class="seg" role="group" aria-label="Language">
+        <button data-lang="en" class="on">EN</button>
+        <button data-lang="fr">FR</button>
+      </div>
+      <div class="seg" role="group" aria-label="Projection">
+        <button data-proj="mercator" class="on">Flat</button>
+        <button data-proj="globe">Globe</button>
+      </div>
+    </div>
+
+    <div class="legend-head">
+      <h2 id="legend-title">Ecozones</h2>
+      <div class="legend-actions">
+        <button id="all-zones" class="link">All</button>
+        <button id="no-zones" class="link">None</button>
+      </div>
+    </div>
+    <ul id="legend"></ul>
+    <div id="area-legend" hidden>
+      <div class="ramp"></div>
+      <div class="ramp-labels"><span id="ramp-min"></span><span id="ramp-max"></span></div>
+    </div>
+
+    <details class="data">
+      <summary>Datasets &amp; source</summary>
+      <ul>
+        <li><a href="data/ecoregions.json" download>ecoregions.json</a> simplified GeoJSON, used by this map (~1 MB)</li>
+        <li><a href="data/ecoregions.csv" download>ecoregions.csv</a> attribute table</li>
+        <li><a href="data/original/nef_ca_ter_ecoregion_v2_2.geojson" download>Original GeoJSON</a> full resolution (~13.5 MB)</li>
+      </ul>
+      <p class="fine">Source: Agriculture and Agri-Food Canada, <em>National Ecological Framework for Canada</em>, terrestrial ecoregions v2.2. Contains information licensed under the <a href="https://open.canada.ca/en/open-government-licence-canada" target="_blank" rel="noopener">Open Government Licence – Canada</a>. Boundaries simplified for display.</p>
+    </details>
+  </div>
+</aside>
+
+<section id="detail" class="card" hidden aria-live="polite">
+  <button id="close-detail" class="icon-btn" aria-label="Close">×</button>
+  <div id="detail-content"></div>
+</section>
+
+<div id="tip" hidden></div>
+<div id="loading">Loading ecoregions…</div>
+
+<script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

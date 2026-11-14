@@ -1,0 +1,215 @@
+﻿ecoregion_id,ecozone_id,ecoprovince_id,name_en,name_fr,area_km2,perimeter_km,polygon_parts
+1,1,1.1,Ellesmere and Devon Island Ice Caps,"Calottes glacaires Ellesmere et Devon
+",4406854,43850,4
+5,1,1.2,Baffin Mountains,Chaîne de Baffin,975355,11739,1
+6,1,1.2,Baffin Island Coastal Lowlands,Basses terres des côtes de l'île de Baffin,208845,3257,1
+7,1,1.2,Torngat Mountains,Chaîne Torngat,181158,2304,1
+8,2,2.2,Ellesmere Mountains,Chaîne Ellesmere,5023814,35899,2
+9,2,2.2,Eureka Hills,Collines Eureka,3784750,24410,1
+11,2,2.1,Sverdrup Islands Lowland,Basses terres de l'île Sverdrup,4936713,11891,1
+12,2,2.3,Parry Islands Plateau,Plateau de Parry,2550091,8341,1
+13,2,2.4,Lancaster Plateau,Plateau de Lancaster,2582377,15029,1
+14,2,2.3,Banks Island Coastal Plain,Plaine côtière de l'île Banks,321151,3959,1
+15,2,2.3,Banks Island Lowland,Basses terres de l'île Banks,1089531,7465,1
+16,2,2.3,Amundsen Gulf Lowlands,Basses terres du golfe Amundsen,1595679,11284,1
+17,2,2.3,Shaler Mountains,Monts Shaler,274846,3117,1
+18,2,2.3,Victoria Islands Lowland,Basses terres de l'île Victoria,3234717,14595,1
+19,2,2.3,Prince of Wales Island Lowland,Basses terres de l'île Prince-de-Galles,443421,3455,1
+20,2,2.5,Boothia Peninsula Plateau,Plateau de la presqu'île Boothia,577402,6133,1
+21,2,2.7,Gulf of Boothia Plain,Plaine du golfe de Boothia,733805,7543,1
+22,2,2.4,Borden Peninsula Plateau,Plateau de la péninsule Borden,510518,5087,1
+23,2,2.5,Melville Peninsula Plateau,Plateau de la presqu'île Melville,1142915,13119,1
+24,2,2.6,Baffin Island Uplands,Hautes terres de l'île de Baffin,669742,10681,1
+25,2,2.7,Foxe Basin Plain,Plaine du bassin Foxe,1103936,5787,1
+26,2,2.5,Pangnirtung Upland,Hautes terres de Pangnirtung,395381,5507,1
+27,2,2.6,Hall Peninsula Upland,"Hautes terres de la péninsule Hall
+",192760,4272,1
+28,2,2.5,Meta Incognita Peninsula,Péninsule Meta Incognita,1049863,13051,1
+29,2,2.6,Baffin Upland,Hautes terres de Baffin,84144,4771,1
+30,2,2.5,Wager Bay Plateau,Plateau de la baie Wager,2245808,10518,1
+31,2,2.5,Northern Ungava Peninsula,Nord de la péninsule d'Ungava,273139,2443,1
+32,3,3.1,Yukon Coastal Plain,Plaine côtière du Yukon,100905,1945,1
+33,3,3.1,Tuktoyaktuk Coastal Plain,Plaine côtière Tuktoyaktuk,332741,3075,1
+34,3,3.1,Anderson River Plain,Plaine de la rivière Anderson,214366,3070,1
+35,3,3.1,Dease Arm Plain,"Plaine du bras Dease
+",412638,7064,1
+36,3,3.1,Coronation Hills,Collines Coronation,464453,6484,1
+37,3,3.1,Bluenose Lake Plain,Plaine du lac Bluenose,170082,2809,1
+38,3,3.1,Bathurst Hills,Collines de Bathurst,189908,4265,1
+39,3,3.2,Queen Maud Gulf Lowland,Basses terres du golf Queen Maud,553599,5372,1
+40,3,3.2,Chantrey Inlet Lowland,"Basses terres de bras Chantrey
+",199941,2528,1
+41,3,3.1,Takijuq Lake Upland,Hautes terres du lac Takijuq,709670,5041,1
+42,3,3.2,Garry Lake Lowland,Basses terres du lac Garry,500999,6293,1
+43,3,3.2,Back River Plain,Plaine de la rivière Back,213148,3476,1
+44,3,3.2,Dubawnt Lake Plain/Upland,Plaine et hautes terres du lac Dubawnt,276118,3538,1
+45,3,3.2,Maguse River Upland,Hautes terres de la rivière Maguse,440736,4423,1
+46,3,3.2,Southampton Island Plain,Plaine de l'île Southampton,2541454,8299,1
+47,3,3.3,Central Ungava Peninsula,Centre de la péninsule d'Ungava,754197,4829,1
+48,3,3.3,Ottawa Islands,Îles Ottawa,254902,2517,1
+49,3,3.3,Belcher Islands,Îles Belcher,126348,1449,1
+50,4,4.2,Mackenzie Delta,Delta du Mackenzie,67157,1307,1
+51,4,4.1,Peel River Plateau,Plateau de la rivière Peel,337891,7835,1
+52,4,4.2,Great Bear Lake Plain,"Plaine du Grand lac de l'Ours
+",683198,8742,1
+53,4,4.2,Fort MacPherson Plain,Plaine Fort MacPherson,193903,2889,1
+54,4,4.2,Colville Hills,Collines de Colville,134548,2796,1
+55,4,4.2,Norman Range,Chaîne Norman,234367,4218,1
+56,4,4.2,Mackenzie River Plain,Plaine du Mackenzie,88462,3329,1
+57,4,4.2,Grandin Plains,Plaines Grandin,63404,1209,1
+58,4,4.2,Franklin Mountains,Monts Franklin,34873,1434,1
+59,4,4.2,Keller Lake Plain,Plaine du lac Keller,141712,3121,1
+60,4,4.2,Great Slave Lake Plain,Plaine du Grand lac des Esclaves,208293,4306,1
+61,4,4.1,Nahanni Plateau,Plateau de la Nahanni,53709,1426,1
+62,4,4.1,Sibbeston Lake Plain,Plaine du lac Sibbeston,59256,2131,1
+63,4,4.2,Horn Plateau,Plateau Horn,114827,2024,1
+64,4,4.3,Hay River Lowland,Basses terres de la rivière Hay,527369,8105,1
+65,4,4.3,Northern Alberta Uplands,Hautes terres du nord de l'Alberta,299939,4053,2
+66,4,4.3,Muskwa Plateau,Plateau Muskwa,87446,2475,1
+68,5,5.1,Coppermine River Upland,Hautes terres de la rivière Coppermine,729581,5881,1
+69,5,5.1,Tazin Lake Upland,Hautes terres du lac Tazin,513473,5218,1
+70,5,5.1,Kazan River Upland,Hautes terres de la rivière Kazan,790116,7067,1
+71,5,5.1,Selwyn Lake Upland,Hautes terres du lac Selwyn,755207,7578,1
+72,5,5.2,La Grande Hills,Collines La Grande,384379,4700,1
+73,5,5.2,Southern Ungava Peninsula,Sud de la péninsule d'Ungava,291867,3584,1
+74,5,5.2,New Quebec Central Plateau,Plateau central du Nouveau-Québec,560654,5487,1
+75,5,5.4,Ungava Bay Basin,Bassin de la baie d'Ungava,347360,3697,1
+76,5,5.4,George Plateau,Plateau de la George,93323,2305,1
+77,5,5.3,Kingurutuk-Fraser Rivers,Rivières Kingurutuk et Fraser,226758,4882,2
+78,5,5.3,Smallwood Reservoir-Michikamau,Réservoir Smallwood et Michikamau,245184,6408,1
+79,5,5.3,Coastal Barrens,Landes côtières,143643,4559,1
+80,5,5.3,Mecatina River,Rivière Mécatina,155029,5046,3
+82,5,5.3,Eagle Plateau,Plateau Eagle,37432,1457,1
+84,5,5.3,"Winokupu Lake North
+",Nord du lac Winokapau,9008,501,1
+85,5,5.3,"Goose River West
+",Ouest de la rivière Goose,14692,776,1
+87,6,6.1,Athabasca Plain,Plaine de l'Athabasca,283078,3516,1
+88,6,6.1,Churchill River Upland,Hautes terres de la rivière Churchill,634583,6894,1
+89,6,6.1,Hayes River Upland,Hautes terres de la rivière Hayes,423086,3915,1
+90,6,6.2,Lac Seul Upland,Hautes terres du lac Seul,380850,4682,1
+91,6,6.5,Lake of the Woods,Lac des Bois,107438,2890,1
+92,6,6.5,Rainy River,Rivière à la pluie,7857,528,1
+93,6,6.5,Thunder Bay-Quetico,Thunder Bay-Quetico,61239,1869,1
+94,6,6.2,Lake Nipigon,Lac Nipigon,223224,3475,1
+95,6,6.1,Big Trout Lake,Lac Big Trout,302684,3825,2
+96,6,6.2,Abitibi Plains,Plaines de l'Abitibi,442146,6338,1
+97,6,6.6,Lac Temiscamingue Lowland,Basses terres du lac Témiscamingue,193691,3233,1
+98,6,6.6,Algonquin-Lake Nipissing,Algonquin-lac Nipissing,152688,2945,1
+99,6,6.6,Southern Laurentians,Sud des Laurentides,366191,4171,1
+100,6,6.2,Rupert River Plateau,Plateau de la Rivière Rupert,230116,4450,1
+101,6,6.3,Central Laurentians,Centre des Laurentides,553301,5251,1
+102,6,6.3,Anticosti Island,Île d'Anticosti,43017,964,1
+103,6,6.3,Mecatina Plateau,Plateau de la Mécatina,355097,3992,1
+104,6,6.3,Paradise River,Rivière Paradise,56072,1530,1
+105,6,6.3,Lake Melville,Lac Melville,63269,2697,1
+106,6,6.4,Strait of Belle Isle,Détroit de Belle Isle,24997,915,1
+107,6,6.4,Northern Penninsula,Péninsule Northern,42695,2031,1
+108,6,6.4,Long Range Mountains,Chaîne Long Range,37463,2879,3
+109,6,6.4,Southwestern Newfoundland,Sud-ouest de Terre-Neuve,44545,1565,1
+112,6,6.4,Central Newfoundland,Centre de Terre-Neuve,71582,3198,1
+113,6,6.4,Northeastern Newfoundland,Nord-est de Terre-Neuve,66454,1753,1
+114,6,6.4,Maritime Barrens,Landes maritimes,142354,3426,1
+115,6,6.4,Avalon Forest,Forêt d'Avalon,1054,174,1
+116,6,6.4,South Avalon-Burin Oceanic Barrens,Landes océaniques du sud d'Avalon et de Burin,27483,1084,1
+117,7,7.1,Appalachians,Appalaches,174967,3633,1
+118,7,7.1,Northern New Brunswick Uplands,Hautes terres du nord du Nouveau-Brunswick,56348,2745,1
+119,7,7.1,New Brunswick Highlands,Hautes terres du Nouveau-Brunswick,10778,672,1
+120,7,7.3,Saint John River Valley,Vallée de la rivière Saint-Jean,7970,936,1
+121,7,7.3,Southern New Brunswick Uplands,Hautes terres du sud du Nouveau-Brunswick,26349,1445,1
+122,7,7.2,Maritime Lowlands,Basses terres des Maritimes,82690,2399,1
+123,7,7.3,Fundy Coast,Côte de la baie de Fundy,36569,1598,1
+124,7,7.3,Southwest Nova Scotia Uplands,Hautes terres du sud-ouest de la Nouvelle-Écosse,31245,972,1
+125,7,7.3,Atlantic Coast,Côte de l'Atlantique,57965,3011,1
+126,7,7.3,Annapolis-Minas Lowlands,Basses terres d'Annapolis-Minas,9485,1079,1
+127,7,7.3,South-central Nova Scotia Uplands,"Hautes terres du centre-sud de la Nouvelle-Écosse
+",12479,1123,1
+128,7,7.3,Nova Scotia Highlands,Hautes terres de la Nouvelle-Écosse,43588,2331,1
+129,7,7.3,Cape Breton Highlands,Hautes terres du Cap-Breton,4848,566,1
+130,7,7.2,Prince Edward Island,Île-du-Prince-Édouard,37961,930,1
+131,7,7.2,Îles-de-la-Madeleine,Îles-de-la-Madeleine,2608,295,1
+132,8,8.1,St. Lawrence Lowlands,Basses terres du fleuve Saint-Laurent,92752,3483,1
+133,8,8.1,Frontenac Axis,Arche de Frontenac,1934,271,1
+134,8,8.1,Manitoulin-Lake Simcoe,Manitoulin-lac Simcoe,161161,3189,1
+135,8,8.2,Lake Erie Lowland,Basses terres du lac Érié,76545,1863,1
+136,9,9.2,Slave River Lowland,Basses terres de la rivière des Esclaves,196475,3056,1
+137,9,9.1,Clear Hills Upland,Hautes terres des collines Clear,154192,2747,1
+138,9,9.2,Peace Lowland,Basses terres de la rivière de la Paix,230656,6079,1
+139,9,9.2,Mid-Boreal Uplands,Hautes terres boréales du Centre,621783,13245,10
+142,9,9.2,Wabasca Lowland,Basses terres Wabasca,172585,3811,1
+143,9,9.2,Western Boreal,Terres boréales de l'Ouest,35417,2301,1
+145,9,9.1,Western Alberta Upland,Hautes terres de l'ouest de l'Alberta,217556,5961,2
+148,9,9.3,Mid-Boreal Lowland,Basses terres boréales du centre,258259,4429,1
+149,9,9.2,Boreal Transition,Transition boréale,283743,10849,1
+155,9,9.3,Interlake Plain,Plaine interlacustre,102428,3537,1
+156,10,10.2,Aspen Parkland,"Tremblai-parc
+",454295,9463,2
+157,10,10.3,Moist Mixed Grassland,"Prairie mixte humide
+",252140,6467,1
+158,10,10.3,Fescue Grassland,Prairie à fétuque,36571,1618,1
+159,10,10.3,Mixed Grassland,Prairie mixte,326556,4332,1
+160,10,10.3,Cypress Upland,Hautes terres Cypress,20357,806,1
+162,10,10.1,Lake Manitoba Plain,Plaine du lac Manitoba,79820,1772,1
+163,10,10.2,Southwest Manitoba Uplands,Hautes terres du sud-ouest du Manitoba,5128,549,2
+165,11,11.1,British-Richardson Mountains,Monts British-Monts Richardson,192118,4029,1
+166,11,11.2,Old Crow Basin,Bassin de la rivière Old Crow,102328,4221,1
+167,11,11.2,Old Crow Flats,Plaines Old Crow,42356,1523,1
+168,11,11.3,North Ogilvie Mountains,Nord des monts Ogilvie,233221,3576,1
+169,11,11.3,Eagle Plains,Plaine Eagle,127983,2343,1
+170,11,11.4,Mackenzie Mountains,Monts Mackenzie,468959,5666,1
+171,11,11.4,Selwyn Mountains,Monts Selwyn,342791,4740,1
+172,12,12.4,Klondike Plateau,Plateau Klondike,188746,2716,1
+173,12,12.1,St. Elias Mountains,Chaîne St. Elias,102075,2093,1
+174,12,12.2,Ruby Ranges,Chaînon Ruby,99341,2649,1
+175,12,12.2,Yukon Plateau-Central,Centre du plateau du Yukon,124892,2513,1
+176,12,12.2,Yukon Plateau-North,Nord du plateau du Yukon,279574,3944,1
+177,12,12.2,Yukon Southern Lakes,Lacs du sud du Yukon,147533,3828,1
+178,12,12.2,Pelly Mountains,Monts Pelly,152281,3912,1
+179,12,12.3,Yukon-Stikine Highlands,Hautes terres de Stikine-Yukon,94770,3404,1
+180,12,12.3,Boreal Mountains and Plateaus,"Montagnes et plateaux boréaux
+",383180,5127,1
+181,12,12.2,Liard Basin,Bassin de la rivière Liard,139792,3301,1
+182,12,12.2,Hyland Highland,Hautes terres de Hyland,106414,2557,1
+183,12,12.3,Northern Canadian Rocky Mountains,Nord des Rocheuses canadiennes,134871,2204,1
+184,13,13.3,Mount Logan,Mont Logan,17290,566,1
+185,13,13.3,Northern Coastal Mountains,"Nord de la chaîne côtière
+",96756,4089,2
+187,13,13.2,Nass Basin,Bassin de la rivière Nass,17776,1162,1
+188,13,13.2,Queen Charlotte Ranges,Chaînons des îles de la Reine-Charlotte,30218,1142,1
+189,13,13.2,Queen Charlotte Lowland,Basses terres des îles de la Reine-Charlotte,10686,572,1
+190,13,13.2,Nass Ranges,Chaînons Nass,38519,1106,1
+191,13,13.2,Coastal Gap,"Trouée côtière
+",193175,3072,1
+192,13,13.2,Pacific Ranges,"Chaînons du Pacifique
+",156593,2938,1
+193,13,13.2,Western Vancouver Island,Ouest de l'île de Vancouver,59175,1794,1
+194,13,13.1,Eastern Vancouver Island,Est de l'île de Vancouver,34754,1377,1
+195,13,13.1,Georgia-Puget Basin,"Bassin de Géorgie-Puget
+",16558,1267,1
+196,13,13.1,Lower Mainland,"Basses terres continentales
+",14853,1164,1
+197,13,13.2,Cascade Ranges,"Chaîne des Cascade
+",767,177,1
+198,14,14.1,Skeena Mountains,Chaîne Skeena,74361,2206,1
+199,14,14.1,Omineca Mountains,Chaîne Omenica,112005,2365,1
+200,14,14.1,Central Canadian Rocky Mountains,Centre des Rocheuses canadiennes,115054,2517,1
+201,14,14.2,Bulkley Ranges,Chaînons Bulkley,8579,659,1
+202,14,14.2,Fraser Plateau,Plateau du Fraser,249551,3757,1
+203,14,14.1,Fraser Basin,Bassin du fleuve Fraser,136702,3148,1
+204,14,14.2,Chilcotin Ranges,Chaînons Chilcotin,30383,1453,1
+205,14,14.4,Columbia Mountains and Highlands,Hautes terres du Columbia et chaîne Columbia,227883,3634,1
+206,14,14.4,Western Continental Ranges,"Ouest des chaînons Continentaux
+",63750,2809,1
+207,14,14.4,Eastern Continental Ranges,"Est des chaînons Continentaux
+",107405,3286,1
+208,14,14.3,Interior Transition Ranges,Chaîne de transition intérieure,37701,1371,1
+209,14,14.3,Thompson-Okanagan Plateau,Plateau Thompson-Okanagan,93012,2291,1
+210,14,14.3,Okanagan Range,Chaînons Okanagan,10647,675,1
+211,14,14.3,Okanagan Highland,Hautes terres de l'Okanagan,2907,526,1
+212,14,14.4,Selkirk-Bitterroot Foothills,Contreforts Selkirk-Bitterroot,18880,861,1
+213,14,14.4,Southern Rocky Mountain Trench,Sillon des Rocheuses du Sud,19387,2973,1
+214,14,14.4,Northern Continental Divide,"Nord de la ligne de partage des eaux
+",37590,1492,1
+215,15,15.1,Coastal Hudson Bay Lowland,Basses terres des côtes de la baie d'Hudson,287899,4845,1
+216,15,15.2,Hudson Bay Lowland,Basses terres de la baie d'Hudson,499284,6053,1
+217,15,15.2,James Bay Lowlands,Basses terres de la baie James,508457,5358,1

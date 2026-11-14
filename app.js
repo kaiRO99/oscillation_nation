@@ -30,6 +30,10 @@ const GROUPS = [
   { name: 'Other land cover', on: false, vals: [1, 2, 3, 4, 5, 6, 7, 8, 9, 71, 72, 73, 74] },
 ];
 
+// Reuse the ?v= from this script's URL (set in index.html) so data files are cache-busted together
+const V = new URL(document.currentScript.src).searchParams.get('v') || '0';
+const withV = (path) => `${path}?v=${V}`;
+
 const $ = (s) => document.querySelector(s);
 const state = { year: 2025, years: [], classes: {}, oni: {}, oniList: [], point: null, history: {} };
 
@@ -48,12 +52,12 @@ map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
 const dataReady = Promise.all([
-  fetch('data/aci_classes.json').then((r) => r.json()),
-  fetch('data/oni.json').then((r) => r.json()),
+  fetch(withV('data/aci_classes.json')).then((r) => r.json()),
+  fetch(withV('data/oni.json')).then((r) => r.json()),
 ]);
 
-map.on('load', async () => {
-  const [aci, oni] = await dataReady;
+// The panel only needs the small data files, so build it straight away, without waiting for the basemap.
+const uiReady = dataReady.then(([aci, oni]) => {
   state.years = aci.years;
   state.classes = aci.classes;
   state.oniList = oni.data;
@@ -63,10 +67,21 @@ map.on('load', async () => {
   const qy = Number(q.get('year'));
   state.year = state.years.includes(qy) ? qy : state.years[state.years.length - 1];
 
+  buildUI();
+  setYear(state.year);
+}).catch((e) => {
+  console.error(e);
+  $('#oni-text').textContent = 'Could not load data files (data/aci_classes.json, data/oni.json).';
+});
+
+map.on('load', async () => {
+  await uiReady;
+  if (!state.years.length) return;
+
   const firstLabel = map.getStyle().layers.find((l) => l.type === 'symbol')?.id;
 
   // ecoregion polygons
-  map.addSource('ecoregions', { type: 'geojson', data: 'data/ecoregions.min.geojson', promoteId: 'id' });
+  map.addSource('ecoregions', { type: 'geojson', data: withV('data/ecoregions.min.geojson'), promoteId: 'id' });
   const zoneColor = ['match', ['get', 'zone']];
   for (const [id, [, c]] of Object.entries(ZONES)) zoneColor.push(Number(id), c);
   zoneColor.push('#999');
@@ -102,10 +117,18 @@ map.on('load', async () => {
     paint: { 'circle-radius': 6, 'circle-color': '#fff', 'circle-stroke-color': '#1d2420', 'circle-stroke-width': 2.5 },
   });
 
-  buildUI();
-  setYear(state.year);
+  // apply anything the user changed in the panel before the map finished loading
+  // (the crop source above was created from the current year and filters, so it needs no refresh)
+  applyEcoToggles();
+  if (!enabledValues().length) map.setLayoutProperty('aci', 'visibility', 'none');
   map.on('click', (e) => openPoint(e.lngLat));
 });
+
+function applyEcoToggles() {
+  if (!map.getLayer('eco-lines')) return;
+  map.setLayoutProperty('eco-lines', 'visibility', $('#eco-lines').checked ? 'visible' : 'none');
+  map.setLayoutProperty('eco-fill', 'visibility', $('#eco-fill').checked ? 'visible' : 'none');
+}
 
 // ---------------------------------------------------------------------------
 // Crop tiles
@@ -139,7 +162,8 @@ function refreshCrops() {
   if (!src) return;
   const any = enabledValues().length > 0;
   map.setLayoutProperty('aci', 'visibility', any ? 'visible' : 'none');
-  if (any) src.setTiles([cropTileUrl()]);
+  const url = cropTileUrl();
+  if (any && src.tiles?.[0] !== url) src.setTiles([url]);
 }
 
 // ---------------------------------------------------------------------------
@@ -276,9 +300,9 @@ function buildUI() {
     li.append(name);
     zl.appendChild(li);
   }
-  $('#eco-lines').onchange = (e) => map.setLayoutProperty('eco-lines', 'visibility', e.target.checked ? 'visible' : 'none');
+  $('#eco-lines').onchange = applyEcoToggles;
   $('#eco-fill').onchange = (e) => {
-    map.setLayoutProperty('eco-fill', 'visibility', e.target.checked ? 'visible' : 'none');
+    applyEcoToggles();
     zl.hidden = !e.target.checked;
   };
 

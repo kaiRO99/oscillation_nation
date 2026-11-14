@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Crops, Ecoregions & ENSO · oscillation.earth</title>
 <link href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css" rel="stylesheet">
-<link href="style.css" rel="stylesheet">
+<!-- Porkbun caches .css/.js for 30 days: bump ?v= on every deploy that changes them -->
+<link href="style.css?v=4" rel="stylesheet">
 </head>
 <body>
 <div id="map"></div>
@@ -63,6 +64,6 @@
 <div id="hint">Click anywhere on farmland to see what was grown there each year.</div>
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-<script src="app.js"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

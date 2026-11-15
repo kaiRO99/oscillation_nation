@@ -1655,16 +1655,20 @@ async function selectDistrict(id, { fly = true } = {}) {
   renderSim();
 }
 
+const SIM_SHOW = 8; // matches listed in the panel and highlighted on the map (the files hold the top k = 10); report.js uses the same cap
 function simMatches(id, t) {
   const buf = state.simCache[id];
   if (!buf) return [];
+  // record (similarity/meta.json layout): uint16 pool index, uint8 year offset, uint8 calendar month, uint8 score;
+  // the matched month can be the one before or after t's
   const { k, pool, start } = state.simMeta;
-  const y0 = Number(start.slice(0, 4));
-  const dv = new DataView(buf, t * k * 4, k * 4);
+  const R = 5, y0 = Number(start.slice(0, 4));
+  const dv = new DataView(buf, t * k * R, k * R);
   const out = [];
-  for (let i = 0; i < k; i++) {
-    const idx = dv.getUint16(i * 4, true), yOff = dv.getUint8(i * 4 + 2), score = dv.getUint8(i * 4 + 3);
-    out.push({ rank: i + 1, id: pool[idx], t: (y0 + yOff - state.y0) * 12 + (t % 12), score });
+  for (let i = 0; i < Math.min(k, SIM_SHOW); i++) {
+    const o = i * R;
+    const idx = dv.getUint16(o, true), yOff = dv.getUint8(o + 2), mon = dv.getUint8(o + 3), score = dv.getUint8(o + 4);
+    out.push({ rank: i + 1, id: pool[idx], t: (y0 + yOff - state.y0) * 12 + mon, score });
   }
   return out;
 }
@@ -1737,9 +1741,13 @@ function renderSim() {
   }
   state.matches = simMatches(id, state.t);
   if (mapReady()) for (const m of state.matches) map.setFeatureState({ source: 'ed', id: m.id }, { match: m.score });
+  const mo = state.t % 12;
+  const winNote = state.simMeta.shift
+    ? `Matches come from ${MONTHS[(mo + 11) % 12]}, ${MONTHS[mo]} or ${MONTHS[(mo + 1) % 12]} of other years, so places whose season runs about a month earlier or later still show up.`
+    : '';
   const head = isExt(state.t)
-    ? `<h2>${isFuture(state.t) ? 'Forecast' : 'This month'} is most like ${infoHtml('Compared on what Meteomatics provides (temperature, precipitation, humidity, wind, sun, snow depth, frost days) plus soil; soil wetness and evapotranspiration are not forecast.')}</h2>`
-    : `<h2>Most similar ${MONTHS[state.t % 12]}s</h2>`;
+    ? `<h2>${isFuture(state.t) ? 'Forecast' : 'This month'} is most like ${infoHtml(`Compared on what Meteomatics provides (temperature, precipitation, humidity, wind, sun, snow depth, frost days) plus soil; soil wetness and evapotranspiration are not forecast. ${winNote}`)}</h2>`
+    : `<h2>Most like this ${MONTHS[mo]}${winNote ? ` ${infoHtml(winNote)}` : ''}</h2>`;
   res.innerHTML = `${head}<ol class="matches">` + state.matches.map((m) => {
     const q = snapshot(m.id, m.t);
     const active = state.activeMatch === `${m.id}:${m.t}`;

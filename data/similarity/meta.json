@@ -466,6 +466,7 @@
  "months": 557,
  "observed_months": 549,
  "k": 10,
+ "shift": 1,
  "weights": {
   "T2M": 0.5,
   "T2M_MAX": 0.5,
@@ -488,6 +489,7 @@
   "soil.oc": 0.25,
   "soil.ph": 0.5
  },
- "layout": "per file: [month][k] x 4 bytes = uint16 LE pool index, uint8 year offset from start, uint8 score",
- "method": "same calendar month, different (observed) year, other ecodistricts; weighted z-score distance over the variables both months have; score = 100*exp(-2*d2/sum(w))"
+ "record_bytes": 5,
+ "layout": "per file: [month][k] x 5 bytes = uint16 LE pool index, uint8 year offset from start, uint8 calendar month 0-11, uint8 score (year and month are the matched month's)",
+ "method": "same calendar month or up to 1 month(s) either side, different (observed) year, other ecodistricts; weighted z-score distance over the variables both months have (monthly totals per day); score = 100*exp(-2*d2/sum(w))"
 }

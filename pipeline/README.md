@@ -17,7 +17,7 @@ build them are in `pipeline/`; downloads and caches go in git-ignored `raw/` fol
   - *Seeded area* – hectares of a crop actually planted, by Census Agricultural Region, for the slider's year.
   - *Irrigation water use* – cubic metres of irrigation water applied, for the growing-season period the slider's month falls in, mapped either **by province** or **by drainage basin** (a finer, sub-provincial watershed cut — e.g. isolating the South Saskatchewan). Shown as the raw volume *or* as the % above/below each area's own survey-period average for that season. Surveyed every second year, 2010–2024. A Canada-wide split of that water by crop type rides along in the panel.
   - *Ecodistrict boundaries.*
-- **Places like yours** (right panel). Pick your ecodistrict (type it or click the map). For the slider's month it lists the 10 ecodistricts whose conditions in the same calendar month of another year were most similar, using every climate variable plus soil, and highlights them on the map.
+- **Places like yours** (right panel). Pick your ecodistrict (type it or click the map). For the slider's month it lists the 8 ecodistricts whose conditions in another year were most similar, using every climate variable plus soil, and highlights them on the map. A match can come from the same calendar month or the month before or after, so a place whose growing season runs about a month earlier or later still shows up.
 
 ### Factors already on the map
 
@@ -140,7 +140,7 @@ python pipeline/build_irrigation.py      # StatCan irrigation volume by province
 | `data/yield.json` | per ecodistrict: estimated yield (kg/ha) by crop and year, for 15 major field crops; per crop: resolution (`res`), last real year (`last`), dropped copied years (`dropped`), and single-crop repeats kept but flagged (`suspect`) |
 | `data/seeded.json` | per region series: hectares seeded by crop and year (12 crops); ecodistrict → region links as runs of years; province totals per crop and year |
 | `data/climate/<VAR>.bin` + `meta.json` | Int16 `[ecodistrict][month]` per climate variable, loaded when picked; `WET_DAYS` / `WET_DAY_PRECIP` (from daily data, `coverage: "farmland"`) come from `build_wet_days.py` |
-| `data/similarity/<id>.bin` + `meta.json` | top 10 matches per month for one ecodistrict, loaded when picked |
+| `data/similarity/<id>.bin` + `meta.json` | top 10 matches per month for one ecodistrict (each with its own year and month), loaded when picked; the panel shows the first 8 |
 | `data/oni.json` | NOAA Oceanic Niño Index |
 | `data/oni_forecast.json` | forecast ONI seasons from ECMWF seasonal sea-surface temperature (`fetch_forecast.py`) |
 | `data/finance.json` | per province/year: direct payments by program, observed yield anomaly, growing-season weather anomaly, ENSO phase, and the $/yield-point sensitivity |
@@ -353,4 +353,4 @@ pass 30 °C) but −12% in southern Manitoba, and Quebec soybeans gain ~4%.
 5. **In-season:** MODIS NDVI (ORNL REST API, 250 m, 2000–now) and the AAFC Canadian Drought Monitor
    history, to update the forecast through June–August.
 
-**Similarity method (kept simple for now).** Each ecodistrict-month is a vector of the 15 climate values plus 5 soil properties, z-scored (climate within each calendar month) and weighted (weights in `pipeline/similarity.py`). Candidates are the same calendar month in a *different* year, in another ecodistrict; each ecodistrict's best year is kept. Score = 100·exp(−2d²/Σw): 100 is identical and a random pair scores about 2. Only farmland ecodistricts (those with soil survey data) are included.
+**Similarity method (kept simple for now).** Each ecodistrict-month is a vector of the 15 climate values plus 5 soil properties, z-scored and weighted (weights in `pipeline/similarity.py`). Monthly totals (precipitation, snowfall, evapotranspiration, frost days) are taken per day so months of different length compare fairly. Candidates are the same calendar month, or the month before or after (`--shift 1`, the default), in a *different* year, in another ecodistrict; each ecodistrict's best month is kept, and the same calendar month wins a tie. Climate is z-scored with the query month's mean and spread, and the neighbouring months use that same scaling, so a June candidate is compared with a July query in the same units (a matched June means that place's June looked like your July). With three months to choose from, scores run a little higher than same-month-only matching did. Score = 100·exp(−2d²/Σw): 100 is identical and a random pair scores about 2. Only farmland ecodistricts (those with soil survey data) are included.

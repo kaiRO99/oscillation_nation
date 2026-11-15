@@ -106,18 +106,23 @@ function isForecast(meta, t) {
   return ext.kinds?.[t - monthIndex(ext.first, meta.start)] === 'forecast';
 }
 
-// The match as stored in A's similarity file (rank 1..k and score), or null if B isn't in A's top k for
-// that month. File layout (similarity/meta.json): [month][k] x 4 bytes = uint16 LE pool index, uint8 year
-// offset from start, uint8 score.
+// The match as stored in A's similarity file (rank and score), or null if B isn't among the matches the
+// map lists for that month. File layout (similarity/meta.json): [month][k] x 5 bytes = uint16 LE pool index,
+// uint8 year offset from start, uint8 calendar month 0-11, uint8 score (B's month can be the one before or
+// after A's).
 function findMatch({ simMeta, simBuf }, A, B) {
   if (!simBuf) return null;
   const { k, pool, start } = simMeta;
+  const shown = Math.min(k, 8); // the map lists only the top 8 of the k stored (SIM_SHOW in app.js)
+  const R = 5;
   const dv = new DataView(simBuf);
-  const yB = Number(B.month.slice(0, 4)) - Number(start.slice(0, 4));
-  for (let i = 0; i < k; i++) {
-    const o = (A.t * k + i) * 4;
-    if (o + 4 > simBuf.byteLength) break;
-    if (pool[dv.getUint16(o, true)] === B.id && dv.getUint8(o + 2) === yB) return { rank: i + 1, score: dv.getUint8(o + 3), k };
+  const yB = Number(B.month.slice(0, 4)) - Number(start.slice(0, 4)), mB = Number(B.month.slice(5, 7)) - 1;
+  for (let i = 0; i < shown; i++) {
+    const o = (A.t * k + i) * R;
+    if (o + R > simBuf.byteLength) break;
+    if (pool[dv.getUint16(o, true)] === B.id && dv.getUint8(o + 2) === yB && dv.getUint8(o + 3) === mB) {
+      return { rank: i + 1, score: dv.getUint8(o + 4), k: shown };
+    }
   }
   return null;
 }

@@ -275,52 +275,90 @@ function drawOni() {
   $('#enso-strip').style.background = `${veil}linear-gradient(90deg, ${stops.join(', ')})`;
 }
 
-// ---- precise time controls: steppers, pickers, a zoomed 3-year slider, keyboard, chart drag
-const ZW = 36; // months in the zoom window
+// ---- time controls: steppers, pickers, keyboard, and two "tapes" (10 years and 3 years) that always keep
+// the selected month in the middle. Drag a tape like film to scroll through time, click to jump.
+const TAPES = [{ id: 'tape-mid', months: 120 }, { id: 'tape-fine', months: 36 }];
 
-function syncTimeControls(fromFine = false) {
-  const t = state.t;
-  $('#pick-month').value = t % 12;
-  $('#pick-year').value = tYear(t);
-  const fine = $('#month-fine');
-  if (!fine) return;
-  const n = state.n, w = Math.min(ZW, n);
-  // re-centre the window unless the user is dragging the zoomed slider itself
-  if (!fromFine && (state.z0 == null || t < state.z0 + 3 || t > state.z0 + w - 4)) {
-    state.z0 = Math.max(0, Math.min(n - w, t - Math.floor(w / 2)));
-  }
-  const z0 = state.z0;
-  fine.min = z0;
-  fine.max = z0 + w - 1;
-  fine.value = t;
-  $('#zmin').textContent = tLabel(z0);
-  $('#zmax').textContent = tLabel(z0 + w - 1);
-  drawZoom();
+function syncTimeControls() {
+  $('#pick-month').value = state.t % 12;
+  $('#pick-year').value = tYear(state.t);
+  TAPES.forEach(drawTape);
 }
 
-function drawZoom() {
-  const svg = $('#oni-zoom');
-  const W = 360, H = 34, mid = H / 2, w = Math.min(ZW, state.n), bw = W / w, z0 = state.z0;
-  const vals = state.oni.slice(z0, z0 + w).filter((v) => v != null).map(Math.abs);
-  const sc = (mid - 2) / Math.max(1.5, ...vals);
+function drawTape({ id, months }) {
+  const svg = $('#' + id);
+  if (!svg) return;
+  const W = 360, top = 2, H = 32, mid = top + H / 2, bw = W / months, half = Math.floor(months / 2);
+  const t0 = state.t - half; // month at the left edge; the selected month sits in the middle slot
+  const vals = [];
+  for (let i = 0; i < months; i++) { const v = state.oni[t0 + i]; if (v != null) vals.push(Math.abs(v)); }
+  const sc = (H / 2 - 1) / Math.max(1.5, ...vals);
+  const fcFrom = state.kinds.indexOf('forecast');
   let s = '';
-  for (let i = 0; i < w; i++) {
-    const t = z0 + i, v = state.oni[t];
-    if (t % 12 === 0 && i > 0) s += `<line x1="${i * bw}" x2="${i * bw}" y1="0" y2="${H}" class="yr"/>`;
+  if (fcFrom >= 0 && fcFrom < t0 + months) {
+    const x = Math.max(0, (fcFrom - t0) * bw);
+    s += `<rect x="${x.toFixed(1)}" width="${(W - x).toFixed(1)}" y="${top}" height="${H}" class="fc"/>`;
+  }
+  const every = months > 60 ? 2 : 1; // year labels: every other year on the 10-year tape
+  for (let i = 0; i < months; i++) {
+    const t = t0 + i;
+    if (t < 0 || t >= state.n) continue;
+    const x = i * bw;
+    if (t % 12 === 0) {
+      s += `<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${top}" y2="${top + H + 2}" class="yr"/>`;
+      if (tYear(t) % every === 0) s += `<text x="${(x + (months > 60 ? 0 : 6 * bw)).toFixed(1)}" y="45" class="lbl">${tYear(t)}</text>`;
+    } else if (months <= 36 && t % 3 === 0) {
+      s += `<text x="${(x + bw / 2).toFixed(1)}" y="45" class="lbl" style="font-size:7.5px">${MONTHS[t % 12][0]}</text>`;
+    }
+    const v = state.oni[t];
     if (v == null) continue;
     const h = v * sc;
-    s += `<rect x="${(i * bw + 0.6).toFixed(2)}" width="${(bw - 1.2).toFixed(2)}" y="${(h >= 0 ? mid - h : mid).toFixed(2)}" ` +
+    const gap = months > 60 ? 0.15 : 0.8;
+    s += `<rect x="${(x + gap).toFixed(2)}" width="${Math.max(0.5, bw - 2 * gap).toFixed(2)}" y="${(h >= 0 ? mid - h : mid).toFixed(2)}" ` +
       `height="${Math.max(0.6, Math.abs(h)).toFixed(2)}" fill="${ENSO[state.enso[t]].color}"${state.oniFc[t] ? ' fill-opacity="0.45"' : ''}/>`;
   }
-  const i = state.t - z0;
+  const cx = half * bw;
   s += `<line x1="0" x2="${W}" y1="${mid}" y2="${mid}" class="zero"/>` +
-    `<rect x="${(i * bw).toFixed(2)}" width="${bw.toFixed(2)}" y="0.5" height="${H - 1}" class="cur"/>`;
+    `<rect x="${(cx - (months > 60 ? 1 : 0)).toFixed(2)}" width="${Math.max(bw, 2).toFixed(2)}" y="${top - 1}" height="${H + 2}" class="cur"/>`;
   svg.innerHTML = s;
 }
 
 function hoverLabel(t) {
   const v = state.oni[t];
   return t == null ? '' : `${tLabel(t)}${v == null ? '' : ` · ONI ${signed(v, 2)}`}${isFuture(t) ? ' (forecast)' : ''}`;
+}
+
+// a tape: drag = scroll time (grab-the-film: drag right goes back), click = jump, wheel = step
+function tapeControl({ id, months }) {
+  const el = $('#' + id);
+  const half = Math.floor(months / 2);
+  const tAt = (e) => { const b = el.getBoundingClientRect(); return state.t - half + Math.floor((e.clientX - b.left) / b.width * months); };
+  let drag = null;
+  el.addEventListener('pointerdown', (e) => {
+    el.setPointerCapture(e.pointerId);
+    drag = { x: e.clientX, t: state.t, moved: false, w: el.getBoundingClientRect().width };
+    el.classList.add('dragging');
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!drag) { $('#thover').textContent = hoverLabel(clampT(tAt(e))); return; }
+    const dx = e.clientX - drag.x;
+    if (Math.abs(dx) > 3) drag.moved = true;
+    if (drag.moved) setMonth(drag.t - Math.round(dx / drag.w * months));
+  });
+  const end = (e) => {
+    if (!drag) return;
+    if (!drag.moved) setMonth(tAt(e));
+    drag = null;
+    el.classList.remove('dragging');
+  };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', () => { drag = null; el.classList.remove('dragging'); });
+  el.addEventListener('pointerleave', () => { if (!drag) $('#thover').textContent = ''; });
+  el.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const d = Math.sign(e.deltaY || e.deltaX);
+    setMonth(state.t + d * (months > 60 ? 12 : 1));
+  }, { passive: false });
 }
 
 function buildTimeControls() {
@@ -332,31 +370,38 @@ function buildTimeControls() {
   const pick = () => setMonth((Number($('#pick-year').value) - state.y0) * 12 + Number($('#pick-month').value));
   $('#pick-month').addEventListener('change', pick);
   $('#pick-year').addEventListener('change', pick);
+
+  // step buttons; holding one down keeps stepping, faster the longer it is held
   for (const b of document.querySelectorAll('.step[data-step]')) {
-    b.addEventListener('click', () => setMonth(state.t + Number(b.dataset.step)));
+    let timer = null;
+    const stop = () => { clearTimeout(timer); timer = null; };
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const d = Number(b.dataset.step);
+      setMonth(state.t + d);
+      let delay = 350;
+      const again = () => { setMonth(state.t + d); delay = Math.max(40, delay * 0.8); timer = setTimeout(again, delay); };
+      timer = setTimeout(again, delay);
+    });
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, stop);
+    b.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setMonth(state.t + Number(b.dataset.step)); } });
   }
   $('#go-now').addEventListener('click', () => setMonth(state.nowT ?? state.n - 1));
   $('#go-now').hidden = state.nowT == null;
 
-  const fine = $('#month-fine');
-  fine.addEventListener('input', () => { setMonthFrom(Number(fine.value), true); });
-  fine.addEventListener('change', () => syncTimeControls()); // re-centre once the drag ends
+  TAPES.forEach(tapeControl);
 
-  // drag / hover on both ONI charts
-  const scrub = (el, toT) => {
-    let down = false;
-    const at = (e) => toT(e, el.getBoundingClientRect());
-    el.addEventListener('pointerdown', (e) => { down = true; el.setPointerCapture(e.pointerId); setMonthFrom(at(e), el.id === 'oni-zoom'); });
-    el.addEventListener('pointermove', (e) => {
-      const t = clampT(at(e));
-      $('#thover').textContent = hoverLabel(t);
-      if (down) setMonthFrom(t, el.id === 'oni-zoom');
-    });
-    el.addEventListener('pointerup', () => { down = false; if (el.id === 'oni-zoom') syncTimeControls(); });
-    el.addEventListener('pointerleave', () => { if (!down) $('#thover').textContent = ''; });
-  };
-  scrub($('#oni-chart'), (e, b) => Math.floor((e.clientX - b.left) / b.width * state.n));
-  scrub($('#oni-zoom'), (e, b) => state.z0 + Math.floor((e.clientX - b.left) / b.width * Math.min(ZW, state.n)));
+  // the big ONI chart: click or drag to scrub absolutely (the whole record)
+  const chart = $('#oni-chart');
+  const chartT = (e) => { const b = chart.getBoundingClientRect(); return Math.floor((e.clientX - b.left) / b.width * state.n); };
+  let down = false;
+  chart.addEventListener('pointerdown', (e) => { down = true; chart.setPointerCapture(e.pointerId); setMonth(chartT(e)); });
+  chart.addEventListener('pointermove', (e) => {
+    $('#thover').textContent = hoverLabel(clampT(chartT(e)));
+    if (down) setMonth(chartT(e));
+  });
+  chart.addEventListener('pointerup', () => { down = false; });
+  chart.addEventListener('pointerleave', () => { if (!down) $('#thover').textContent = ''; });
 
   // keyboard: arrows step a month, Shift + arrows a year (when not typing in a field)
   document.addEventListener('keydown', (e) => {
@@ -368,18 +413,20 @@ function buildTimeControls() {
   });
 }
 
-// setMonth, telling the zoom window not to re-centre while it is being dragged
-function setMonthFrom(t, fromFine) {
-  state.fromFine = fromFine;
-  setMonth(t);
-  state.fromFine = false;
+// map + similarity repaint at most once per frame, so dragging stays smooth
+let paintQueued = false;
+function schedulePaint() {
+  if (paintQueued) return;
+  paintQueued = true;
+  requestAnimationFrame(() => { paintQueued = false; paintAll(); renderSim(); });
+  setTimeout(() => { if (paintQueued) { paintQueued = false; paintAll(); renderSim(); } }, 120); // hidden tab: no rAF
 }
 
 function setMonth(t) {
   state.t = clampT(t);
   const slider = $('#month');
   slider.value = state.t;
-  syncTimeControls(state.fromFine);
+  syncTimeControls();
   $('#month-label').innerHTML = esc(tLabel(state.t)) + (isFuture(state.t) ? ' <span class="fc-tag">forecast</span>' : '');
   const ph = state.enso[state.t], v = state.oni[state.t], fc = state.oniFc[state.t];
   const badge = $('#enso-badge');
@@ -390,7 +437,7 @@ function setMonth(t) {
     ? `<b>Forecast</b> ONI for the ${ONI_SEASONS[state.t % 12]} season centred on ${tLabel(state.t)}, from the ECMWF seasonal ` +
       'forecast of Niño 3.4 sea temperature (via Meteomatics), anchored to NOAA\'s latest observation. '
     : `ONI for the ${ONI_SEASONS[state.t % 12]} season centred on ${tLabel(state.t)}. `) +
-    'Coloured as an El Niño / La Niña episode when it stays beyond ±0.5 °C for 5+ overlapping seasons; the shaded end is forecast. Click or drag the chart, use the arrows, or the zoomed slider for single months.';
+    'Coloured as an El Niño / La Niña episode when it stays beyond ±0.5 °C for 5+ overlapping seasons; the shaded end is forecast. Drag the big chart for any year, the 10-year and 3-year strips below for nearby years and single months, or use the arrow keys.';
   const sel = $('#oni-sel');
   if (sel) {
     const x = (state.t + 0.5) * 300 / state.n;
@@ -399,8 +446,7 @@ function setMonth(t) {
   const url = new URL(location.href);
   url.searchParams.set('m', `${tYear(state.t)}-${String(state.t % 12 + 1).padStart(2, '0')}`);
   history.replaceState(null, '', url);
-  paintAll();
-  renderSim();
+  schedulePaint();
 }
 
 // ---------------------------------------------------------------------------

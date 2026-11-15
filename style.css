@@ -127,9 +127,14 @@ input[type=checkbox] { accent-color: var(--accent); margin: 0; }
   background: #fff; font: inherit; font-size: 14px; line-height: 1; cursor: pointer; color: #1d2420; }
 .step:hover { background: #f1efe8; }
 .step.wide { font-size: 12px; font-weight: 600; }
-.zoom { margin: 4px 0 2px; padding: 6px 6px 2px; background: #f6f5f0; border-radius: 6px; }
-#oni-zoom { width: 100%; height: 34px; display: block; cursor: pointer; }
-#oni-zoom .yr { stroke: #9a978c; stroke-width: .6; vector-effect: non-scaling-stroke; }
-#oni-zoom .zero { stroke: #7d8a82; stroke-width: .6; vector-effect: non-scaling-stroke; }
-#oni-zoom .cur { fill: none; stroke: #111; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
-#month-fine { width: 100%; accent-color: #1d2420; margin: 2px 0 0; }
+.tapes { margin: 6px 0 2px; padding: 6px 6px 4px; background: #f6f5f0; border-radius: 6px; }
+.tape-head { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin: 2px 2px 1px; }
+.tape-head .muted { font-weight: 400; }
+.tape { width: 100%; height: auto; display: block; cursor: grab; touch-action: none; user-select: none; }
+.tape.dragging { cursor: grabbing; }
+.tape .yr { stroke: #9a978c; stroke-width: .7; }
+.tape .zero { stroke: #7d8a82; stroke-width: .6; }
+.tape .cur { fill: rgba(0,0,0,.06); stroke: #111; stroke-width: 1.4; }
+.tape .lbl { font-size: 9px; fill: #555; text-anchor: middle; }
+.tape .lbl.now { fill: #111; font-weight: 700; }
+.tape .fc { fill: rgba(40, 50, 60, 0.07); }

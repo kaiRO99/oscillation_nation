@@ -1131,6 +1131,22 @@
    "scale": 0.1,
    "power": "FROST_DAYS",
    "forecast": true
+  },
+  "WET_DAYS": {
+   "label": "Wet days (≥ 1 mm)",
+   "units": "days",
+   "scale": 0.1,
+   "source": "NASA POWER daily (PRECTOTCORR), pipeline/fetch_power_daily.py",
+   "forecast": false,
+   "coverage": "farmland"
+  },
+  "WET_DAY_PRECIP": {
+   "label": "Precipitation per wet day",
+   "units": "mm",
+   "scale": 0.1,
+   "source": "NASA POWER daily (PRECTOTCORR), pipeline/fetch_power_daily.py",
+   "forecast": false,
+   "coverage": "farmland"
   }
  },
  "layout": "Int16 little-endian, row-major [ecodistrict][month]; value = int * scale; -32768 = missing",

@@ -87,6 +87,7 @@ function buildReport(ctx, A, B) {
     A, B,
     match: findMatch(ctx, A, B),
     distance_km: haversine(A.r.lp, B.r.lp),
+    since: Number(meta.start.slice(0, 4)),  // first year of the climate record (forecast ranges)
     climate: CLIMATE.map(([key, nd]) => ({
       key, nd, label: meta.vars[key].label, units: meta.vars[key].units,
       a: climateAt(ctx, key, A), b: climateAt(ctx, key, B),
@@ -135,7 +136,13 @@ function climateAt({ meta, bins }, key, side) {
     if (v != null) { s += v; c++; }
   }
   const v = val(side.t);
-  return { v, anom: v != null && c ? v - s / c : null };
+  // forecast month: 80% range (climate-range.js), from this district's observed (NASA POWER) months only
+  let range = null;
+  if (side.forecast && v != null && key in FC_RANGE_KIND) {
+    const nObs = meta.power_last ? monthIndex(meta.power_last, meta.start) + 1 : n, m = side.t % 12;
+    range = climateRange(key, v, climateSpread(val, nObs, m, FC_RANGE_KIND[key]), daysInMonth(y0 + Math.floor(side.t / 12), m));
+  }
+  return { v, anom: v != null && c ? v - s / c : null, range };
 }
 
 function haversine([lon1, lat1], [lon2, lat2]) {
@@ -201,12 +208,16 @@ function render(d) {
 
     <section>
       <h2>Conditions in the matched months</h2>
-      <p class="muted small">In brackets: difference from each district's ${NORMAL[0]}–${NORMAL[1]} normal for that calendar month.</p>
+      <p class="muted small">In brackets: difference from each district's ${NORMAL[0]}–${NORMAL[1]} normal for that calendar month.${A.forecast
+        ? ` ${monthName(A.month)} is a forecast (ECMWF seasonal, ensemble mean): under it, the 80% range, which adds how much that month has
+          varied from year to year in the district since ${d.since}. Only the ensemble mean is available, so the range counts
+          only that usual swing: it gives the forecast no credit for skill, and can't allow for the forecast itself being off.` : ''}</p>
       <table class="compare">
         <thead>${head}</thead>
         <tbody>${d.climate.map((c) => `<tr>
           <th scope="row">${esc(c.label)} <span class="muted">(${esc(c.units)})</span></th>
-          ${[c.a, c.b].map((x) => `<td class="num">${fmt(x.v, c.nd)} <span class="muted">(${signed(x.anom, c.nd)})</span></td>`).join('')}
+          ${[c.a, c.b].map((x) => `<td class="num">${fmt(x.v, c.nd)} <span class="muted">(${signed(x.anom, c.nd)})</span>${x.range
+            ? `<div class="muted small">80%: ${fmt(x.range[0], c.nd)} to ${fmt(x.range[1], c.nd)}</div>` : ''}</td>`).join('')}
         </tr>`).join('')}</tbody>
       </table>
     </section>

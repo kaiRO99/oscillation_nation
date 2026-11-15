@@ -20,3 +20,7 @@ As El Niño years come and go, the districts shift to show which places your loc
 Click any region similar to yours to open a report on how farms there operate: crops and seeds planted, yields, irrigation, soil health, and other practices other farmers use, along with how well each worked. Farmers can then adapt what already works to their own location.
 
 
+
+## Technical docs
+
+Map layers, the data pipeline and data caveats: [pipeline/README.md](../pipeline/README.md).

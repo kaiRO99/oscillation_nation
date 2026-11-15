@@ -6,7 +6,7 @@
 <title>Oscillation Nation · El Niño and Canadian farmland</title>
 <link href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css" rel="stylesheet">
 <!-- Porkbun caches .css/.js for 30 days: bump ?v= on every deploy that changes them -->
-<link href="style.css?v=25" rel="stylesheet">
+<link href="style.css?v=27" rel="stylesheet">
 </head>
 <body>
 <div id="map"></div>
@@ -14,6 +14,7 @@
 <aside id="panel" class="card">
   <header>
     <h1>Oscillation Nation</h1>
+    <button id="intro-open" class="help" type="button" title="How to use this map" aria-label="How to use this map">?</button>
     <button class="collapse" data-target="panel" aria-label="Collapse panel">–</button>
   </header>
   <div class="body">
@@ -55,32 +56,52 @@
       Climate: <a href="https://power.larc.nasa.gov/" target="_blank" rel="noopener">NASA POWER</a>; recent months and the seasonal forecast (ECMWF) from <a href="https://www.meteomatics.com/" target="_blank" rel="noopener">Meteomatics</a>.
       ENSO: <a href="https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php" target="_blank" rel="noopener">NOAA CPC ONI</a>; forecast ONI from ECMWF Niño 3.4 sea temperature (Meteomatics).
       Farm support payments: <a href="https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3210009801" target="_blank" rel="noopener">Statistics Canada, direct payments</a> (province, annual).
-      Seeded area: <a href="https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3210000201" target="_blank" rel="noopener">Statistics Canada, areas of principal field crops</a> (Census Agricultural Regions).
+      Seeded area: <a href="https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3210000201" target="_blank" rel="noopener">Statistics Canada, areas of principal field crops</a> (Census Agricultural Regions) and <a href="https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3210035901" target="_blank" rel="noopener">by province</a>.
+      Yield forecast (end of the timeline): observed yields from the same regional table, NASA POWER weather, the ECMWF seasonal forecast and the <a href="https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/outlook/" target="_blank" rel="noopener">NOAA CPC ENSO outlook</a>; method in <code>pipeline/build_yield_forecast.py</code>.
       Irrigation: <a href="https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3810003701" target="_blank" rel="noopener">Statistics Canada, irrigation volume</a> (every second year), by province or <a href="https://open.canada.ca/data/en/dataset/b1c2dffa-c2ba-4d0e-b803-a483eef0f579" target="_blank" rel="noopener">drainage region</a>.
       Datasets are averaged per ecodistrict unless noted.</span></span></h2>
+      <!-- Temperature, Precipitation and Other climate share one map fill: turning one on turns the others off -->
       <div class="layer">
         <div class="layer-head">
-          <label class="check"><input id="lyr-climate" type="checkbox" checked> Climate</label>
-          <span class="info" id="climate-info" tabindex="0" role="button" aria-label="More info">i<span class="info-src"><span id="climate-note"></span></span></span>
-          <button class="expand" aria-expanded="false" aria-controls="climate-opts" title="Options"><span aria-hidden="true">▾</span></button>
+          <label class="check"><input id="lyr-temp" type="checkbox" checked> Temperature</label>
+          <select id="temp-var" class="head-pick" aria-label="Temperature measure"></select>
+          <span class="info" id="temp-info" tabindex="0" role="button" aria-label="More info">i<span class="info-src"><span id="temp-note"></span></span></span>
         </div>
-        <div class="opts" id="climate-opts" hidden>
-          <select id="climate-var" aria-label="Climate variable"></select>
-          <select id="climate-mode" aria-label="Show">
-            <option value="value">Monthly value</option>
-            <option value="anom">Difference from 1991–2020 normal</option>
-          </select>
+        <div class="ramp legend" id="temp-ramp" data-for="lyr-temp"></div>
+      </div>
+      <div class="layer">
+        <div class="layer-head">
+          <label class="check"><input id="lyr-precip" type="checkbox"> Precipitation</label>
+          <select id="precip-var" class="head-pick" aria-label="Precipitation measure"></select>
+          <span class="info" id="precip-info" tabindex="0" role="button" aria-label="More info">i<span class="info-src"><span id="precip-note"></span></span></span>
         </div>
-        <div class="ramp legend" id="climate-ramp" data-for="lyr-climate"></div>
+        <div class="ramp legend" id="precip-ramp" data-for="lyr-precip"></div>
+      </div>
+      <label class="check anom-toggle"><input id="climate-anom" type="checkbox"> Difference from 1991–2020 normal</label>
+
+      <button id="adv-toggle" class="adv-toggle" type="button" aria-expanded="false" aria-controls="adv">
+        Advanced <span id="adv-count" class="adv-count"></span><span class="chev" aria-hidden="true">▾</span>
+      </button>
+      <div id="adv" hidden>
+      <div class="layer">
+        <div class="layer-head">
+          <label class="check"><input id="lyr-other" type="checkbox"> Other climate</label>
+          <span class="info" id="other-info" tabindex="0" role="button" aria-label="More info">i<span class="info-src"><span id="other-note"></span></span></span>
+          <button class="expand" aria-expanded="false" aria-controls="other-opts" title="Options"><span aria-hidden="true">▾</span></button>
+        </div>
+        <div class="opts" id="other-opts" hidden>
+          <select id="other-var" aria-label="Climate variable"></select>
+        </div>
+        <div class="ramp legend" id="other-ramp" data-for="lyr-other"></div>
       </div>
       <div class="layer">
         <div class="layer-head">
           <label class="check"><input id="lyr-soil" type="checkbox"> Soil</label>
-          <span class="info" tabindex="0" role="button" aria-label="More info">i<span class="info-src">Soil Landscapes of Canada v3.2, averaged per ecodistrict. Only farmland has detailed soil survey data.</span></span>
+          <span class="info" id="soil-info" tabindex="0" role="button" aria-label="More info">i<span class="info-src"><span id="soil-note"></span></span></span>
           <button class="expand" aria-expanded="false" aria-controls="soil-opts" title="Options"><span aria-hidden="true">▾</span></button>
         </div>
         <div class="opts" id="soil-opts" hidden>
-          <select id="soil-var" aria-label="Soil property"></select>
+          <select id="soil-var" aria-label="Soil moisture or property"></select>
         </div>
         <div class="ramp legend" id="soil-ramp" data-for="lyr-soil"></div>
       </div>
@@ -154,15 +175,16 @@
             <option value="Aug">August</option>
             <option value="SO">September–October</option>
           </select>
+          <label class="check small"><input id="irrigation-labels-on" type="checkbox" checked> Number labels on the map</label>
         </div>
         <div class="ramp legend" id="irrigation-ramp" data-for="lyr-irrigation"></div>
       </div>
       <div class="layer">
         <div class="layer-head">
           <label class="check"><input id="lyr-lines" type="checkbox" checked> Boundaries</label>
-          
           <span class="expand-pad"></span>
         </div>
+      </div>
       </div>
     </section>
   </div>
@@ -183,6 +205,27 @@
     <div id="sim-results"></div>
   </div>
 </aside>
+
+<!-- first-visit intro (app.js buildIntro); reopened with the ? in the panel header -->
+<dialog id="intro" aria-labelledby="intro-title">
+  <div class="intro-body">
+    <h2 id="intro-title">Welcome to Oscillation Nation</h2>
+    <p class="intro-lead">El Niño and La Niña shift temperature and rainfall across Canada, and every farm feels it differently.
+      Use this map to see what past El Niño and La Niña years did to your area, and to find places that have already
+      lived through the conditions forecast for yours.</p>
+    <ol class="intro-steps">
+      <li><span><b>Pick a month.</b> Drag the timeline or press ← →. Red marks El Niño, blue La Niña, green neutral.
+        The last few months are a forecast.</span></li>
+      <li><span><b>Choose what the map shows.</b> Temperature or precipitation, or open <i>Advanced</i> for soil, crops,
+        yields and more. Hover over the map to read the numbers.</span></li>
+      <li><span><b>Find places like yours.</b> Click your ecodistrict (the patch of map around your farm).
+        <i>Places like yours</i> then lists the places and years whose climate and soil came closest.
+        Click a match to zoom to it, then <i>Generate report</i> for a side-by-side comparison.</span></li>
+    </ol>
+    <p class="intro-foot">The <span class="intro-i" aria-hidden="true">i</span> icons explain each dataset and where it comes from.</p>
+    <form method="dialog"><button class="intro-go" autofocus>Start exploring</button></form>
+  </div>
+</dialog>
 
 <div id="tip" hidden></div>
 

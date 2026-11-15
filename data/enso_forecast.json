@@ -1,0 +1,35 @@
+{
+ "note": "Hand-maintained input for scripts/build_yield_forecast.py. Update monthly from NOAA CPC (2nd Thursday) and re-run the script. Values are the Relative Oceanic Nino Index (RONI, deg C vs 1991-2020), which CPC now verifies against; the yield model's ENSO history uses RONI too (data/raw/enso/RONI.ascii.txt).",
+ "issued": "2026-11-12",
+ "target_year": 2027,
+ "index": "RONI",
+ "sources": {
+  "percentiles": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/outlook/",
+  "strengths": "https://cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/strengths/",
+  "discussion": "https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso_advisory/ensodisc.shtml"
+ },
+ "status": "El Nino Advisory. Strong-to-very-strong El Nino likely through Jan-Mar 2027 (>79%); ~60% chance of a historic event (3-month RONI >= +2.5) in OND/NDJ.",
+ "seasons": {
+  "OND": {"p05": 2.19, "p50": 2.50, "p95": 2.82},
+  "NDJ": {"p05": 2.00, "p50": 2.53, "p95": 3.07},
+  "DJF": {"p05": 1.59, "p50": 2.28, "p95": 2.97},
+  "JFM": {"p05": 1.08, "p50": 1.79, "p95": 2.50},
+  "FMA": {"p05": 0.60, "p50": 1.23, "p95": 1.86},
+  "MAM": {"p05": 0.18, "p50": 0.74, "p95": 1.31},
+  "AMJ": {"p05": -0.24, "p50": 0.34, "p95": 0.92},
+  "MJJ": {"p05": -0.65, "p50": -0.01, "p95": 0.64},
+  "JJA": {"p05": -1.01, "p50": -0.25, "p95": 0.51}
+ },
+ "strength_bins": ["<=-2.0", "-2.0..-1.5", "-1.5..-1.0", "-1.0..-0.5", "-0.5..0.5", "0.5..1.0", "1.0..1.5", "1.5..2.0", ">=2.0"],
+ "strength_probs": {
+  "OND": [0, 0, 0, 0, 0, 0, 0, 0, 100],
+  "NDJ": [0, 0, 0, 0, 0, 0, 0, 4, 96],
+  "DJF": [0, 0, 0, 0, 0, 0, 2, 19, 79],
+  "JFM": [0, 0, 0, 0, 0, 3, 18, 44, 35],
+  "FMA": [0, 0, 0, 0, 2, 21, 49, 25, 3],
+  "MAM": [0, 0, 0, 0, 20, 53, 25, 2, 0],
+  "AMJ": [0, 0, 0, 1, 61, 34, 4, 0, 0],
+  "MJJ": [0, 0, 1, 12, 75, 11, 1, 0, 0],
+  "JJA": [0, 0, 6, 27, 61, 6, 0, 0, 0]
+ }
+}

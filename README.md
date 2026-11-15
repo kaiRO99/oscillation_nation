@@ -20,9 +20,14 @@ As El Niño years come and go, the districts shift to show which places your loc
 Click any region similar to yours to open a report on how farms there operate: crops and seeds planted, yields, irrigation, soil health, and other practices other farmers use, along with how well each worked. Farmers can then adapt what already works to their own location.
 
 ## Live Site
+
 [oscillation.earth](https://oscillation.earth)
 
 ## Demo
+
 [Demo](https://github.com/user-attachments/assets/1bcb9889-4043-4e93-ab44-66bd6b1d4658)
 
 
+## AI Use
+
+This project was built with help from AI coding assistants, which we used for writing code, processing data and drafting documentation.

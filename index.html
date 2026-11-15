@@ -6,7 +6,7 @@
 <title>Oscillation Nation · El Niño and Canadian farmland</title>
 <link href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css" rel="stylesheet">
 <!-- Porkbun caches .css/.js for 30 days: bump ?v= on every deploy that changes them -->
-<link href="style.css?v=22" rel="stylesheet">
+<link href="style.css?v=23" rel="stylesheet">
 </head>
 <body>
 <div id="map"></div>
@@ -54,7 +54,10 @@
       All under the <a href="https://open.canada.ca/en/open-government-licence-canada" target="_blank" rel="noopener">Open Government Licence – Canada</a>.
       Climate: <a href="https://power.larc.nasa.gov/" target="_blank" rel="noopener">NASA POWER</a>; recent months and the seasonal forecast (ECMWF) from <a href="https://www.meteomatics.com/" target="_blank" rel="noopener">Meteomatics</a>.
       ENSO: <a href="https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php" target="_blank" rel="noopener">NOAA CPC ONI</a>; forecast ONI from ECMWF Niño 3.4 sea temperature (Meteomatics).
-      Every dataset is averaged per ecodistrict.</span></span></h2>
+      Farm support payments: <a href="https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3210009801" target="_blank" rel="noopener">Statistics Canada, direct payments</a> (province, annual).
+      Seeded area: <a href="https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3210000201" target="_blank" rel="noopener">Statistics Canada, areas of principal field crops</a> (Census Agricultural Regions).
+      Irrigation: <a href="https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3810003701" target="_blank" rel="noopener">Statistics Canada, irrigation volume</a> (every second year), by province or <a href="https://open.canada.ca/data/en/dataset/b1c2dffa-c2ba-4d0e-b803-a483eef0f579" target="_blank" rel="noopener">drainage region</a>.
+      Datasets are averaged per ecodistrict unless noted.</span></span></h2>
       <div class="layer">
         <div class="layer-head">
           <label class="check"><input id="lyr-climate" type="checkbox" checked> Climate</label>
@@ -100,9 +103,59 @@
           <select id="yield-mode" aria-label="Show">
             <option value="value">Yield (kg/ha)</option>
             <option value="anom">Difference from average</option>
+            <option value="biv">Seeded area vs result</option>
           </select>
         </div>
         <div class="ramp legend" id="yield-ramp" data-for="lyr-yield"></div>
+      </div>
+      <div class="layer">
+        <div class="layer-head">
+          <label class="check"><input id="lyr-seeded" type="checkbox"> Seeded area</label>
+          <span class="info" tabindex="0" role="button" aria-label="More info">i<span class="info-src"><span id="seeded-text"></span></span></span>
+          <button class="expand" aria-expanded="false" aria-controls="seeded-opts" title="Options"><span aria-hidden="true">▾</span></button>
+        </div>
+        <div class="opts" id="seeded-opts" hidden>
+          <select id="seeded-crop" aria-label="Crop"></select>
+        </div>
+        <div class="ramp legend" id="seeded-ramp" data-for="lyr-seeded"></div>
+      </div>
+      <div class="layer">
+        <div class="layer-head">
+          <label class="check"><input id="lyr-finance" type="checkbox"> Farm support payments</label>
+          <span class="info" tabindex="0" role="button" aria-label="More info">i<span class="info-src"><span id="finance-text"></span></span></span>
+          <button class="expand" aria-expanded="false" aria-controls="finance-opts" title="Options"><span aria-hidden="true">▾</span></button>
+        </div>
+        <div class="opts" id="finance-opts" hidden>
+          <select id="finance-metric" aria-label="Payment type"></select>
+        </div>
+        <div class="ramp legend" id="finance-ramp" data-for="lyr-finance"></div>
+      </div>
+      <div class="layer">
+        <div class="layer-head">
+          <label class="check"><input id="lyr-irrigation" type="checkbox"> Irrigation water</label>
+          <span class="info" tabindex="0" role="button" aria-label="More info">i<span class="info-src"><span id="irrigation-text"></span><span id="irrigation-crops"></span></span></span>
+          <button class="expand" aria-expanded="false" aria-controls="irrigation-opts" title="Options"><span aria-hidden="true">▾</span></button>
+        </div>
+        <div class="opts" id="irrigation-opts" hidden>
+          <select id="irrigation-geo" aria-label="Irrigation geography">
+            <option value="basin">By drainage basin</option>
+            <option value="prov">By province</option>
+          </select>
+          <select id="irrigation-mode" aria-label="Show">
+            <option value="value">Volume (m³)</option>
+            <option value="anom">Difference from average</option>
+          </select>
+          <select id="irrigation-period" aria-label="Irrigation season">
+            <option value="auto">Season follows the timeline</option>
+            <option value="total">Full season</option>
+            <option value="AM">April–May</option>
+            <option value="Jun">June</option>
+            <option value="Jul">July</option>
+            <option value="Aug">August</option>
+            <option value="SO">September–October</option>
+          </select>
+        </div>
+        <div class="ramp legend" id="irrigation-ramp" data-for="lyr-irrigation"></div>
       </div>
       <div class="layer">
         <div class="layer-head">
@@ -134,6 +187,6 @@
 <div id="tip" hidden></div>
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-<script src="app.js?v=22"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>

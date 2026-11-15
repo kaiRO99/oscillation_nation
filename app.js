@@ -23,6 +23,7 @@ const RAMPS = {
   awhc: ['#fff7d6', '#d6e9a8', '#86c58a', '#3c9a8f', '#1d5f80'],
   anomTemp: ['#2166ac', '#67a9cf', '#d1e5f0', '#f7f7f7', '#fddbc7', '#ef8a62', '#b2182b'],
   anomWet: ['#8c510a', '#d8b365', '#f6e8c3', '#f5f5f5', '#c7eae5', '#5ab4ac', '#01665e'],
+  money: ['#e8d49a', '#d8b365', '#c69a3f', '#b06a1c', '#8c3a10', '#5e1a08'],
 };
 const VAR_KIND = {
   T2M: 'temp', T2M_MAX: 'temp', T2M_MIN: 'temp', T2MDEW: 'temp', FROST_DAYS: 'cold', SNODP: 'cold', SNOWFALL: 'cold',
@@ -39,6 +40,14 @@ const CROP_GROUPS = {
   fruit: ['Fruit, berries & vines', '#d0457e'], other: ['Other crops', '#8a8a8a'],
 };
 
+// irrigation crop-type colours (national breakdown bar) and the slider-month -> season mapping
+const IRR_CROP_COLORS = {
+  'Field crops': '#2b8cbe', 'Hay': '#86c58a', 'Improved pasture': '#c9a467',
+  'Fruit': '#d0457e', 'Vegetable': '#8e5ba6', 'Forage crops': '#5ab4ac',
+};
+// calendar month index (0=Jan) -> irrigation season key; off-season months fall back to the full-season total
+const IRR_MONTH_PERIOD = { 3: 'AM', 4: 'AM', 5: 'Jun', 6: 'Jul', 7: 'Aug', 8: 'SO', 9: 'SO' };
+
 // Reuse the ?v= from this script's URL (set in index.html) so data files are cache-busted together
 const V = new URL(document.currentScript.src).searchParams.get('v') || '0';
 const withV = (path) => `${path}?v=${V}`;
@@ -51,6 +60,10 @@ const state = {
   t: 0, y0: 1981, n: 0,
   climateVar: 'T2M', climateMode: 'value', soilVar: 'awhc',
   yieldCrop: 'WHTSPG', yieldMode: 'value', yield: null, yieldIdx: {}, yieldMeans: {}, yieldDomains: {},
+  seededCrop: 'WHTSPG', seeded: null, seededIdx: {}, seededDomains: {}, seededMaxCache: {},
+  finance: null, financeMetric: 'total_net', provPts: null, financeMeans: {},
+  irrigation: null, irrigationPeriod: 'auto', irrigationGeo: 'basin', irrigationMode: 'value',
+  drainageGeo: null, basinPts: null, eco2basin: {},
   meta: null, eco: null, ids: [], rowOf: {}, bins: {}, normals: {}, domains: {},
   oni: [], enso: [], oniFc: [], classes: {},
   nObs: 0, nowT: null, kinds: [], // months < nObs are NASA POWER; later ones come from Meteomatics
@@ -87,21 +100,37 @@ const dataReady = Promise.all([
   getJSON('data/similarity/meta.json').catch(() => null),
   getJSON('data/oni_forecast.json').catch(() => null),
   getJSON('data/yield.json').catch(() => null),
+  getJSON('data/financials.json').catch(() => null),
+  getJSON('data/seeded.json').catch(() => null),
+  getJSON('data/irrigation.json').catch(() => null),
+  getJSON('data/drainage.min.geojson').catch(() => null),
 ]);
 
 const monthIndex = (ym, y0) => (Number(ym.slice(0, 4)) - y0) * 12 + Number(ym.slice(5, 7)) - 1;
 
-const uiReady = dataReady.then(async ([oni, eco, meta, aci, simMeta, oniFc, yieldData]) => {
+const uiReady = dataReady.then(async ([oni, eco, meta, aci, simMeta, oniFc, yieldData, financeData, seededData, irrigationData, drainageData]) => {
   state.eco = eco;
   state.meta = meta;
   state.simMeta = simMeta;
   state.yield = yieldData;
+  state.finance = financeData;
+  if (financeData && !(state.financeMetric in financeData.metrics)) {
+    state.financeMetric = Object.keys(financeData.metrics)[0];
+  }
   if (yieldData) {
     yieldData.crops.forEach(([code], i) => { state.yieldIdx[code] = i; });
     if (!(state.yieldCrop in state.yieldIdx)) state.yieldCrop = yieldData.crops[0][0];
     const first = yieldData.d[Object.keys(yieldData.d)[0]];
     yieldData.y1 = yieldData.y0 + (first ? first[0].length - 1 : 0);
   }
+  state.seeded = seededData;
+  if (seededData) {
+    seededData.crops.forEach(([code], i) => { state.seededIdx[code] = i; });
+    if (!(state.seededCrop in state.seededIdx)) state.seededCrop = seededData.crops[0][0];
+  }
+  state.irrigation = irrigationData;
+  state.drainageGeo = drainageData;
+  if (!drainageData) state.irrigationGeo = 'prov';  // no basin geometry -> fall back to provinces
   state.classes = aci.classes;
   state.ids = meta.ids;
   meta.ids.forEach((id, i) => { state.rowOf[id] = i; });
@@ -145,8 +174,23 @@ map.on('load', async () => {
     paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0.8 } }, firstLabel);
   map.addLayer({ id: 'climate-fill', type: 'fill', source: 'ed',
     paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0.72 } }, firstLabel);
-  map.addLayer({ id: 'yield-fill', type: 'fill', source: 'ed', layout: { visibility: 'none' },
+  map.addLayer({ id: 'seeded-fill', type: 'fill', source: 'ed', layout: { visibility: 'none' },
     paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0.78 } }, firstLabel);
+  map.addLayer({ id: 'irrigation-fill', type: 'fill', source: 'ed', layout: { visibility: 'none' },
+    paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0.78 } }, firstLabel);
+  // irrigation by drainage basin: a separate, finer sub-provincial geography (own source)
+  if (state.drainageGeo) {
+    map.addSource('drainage', { type: 'geojson', data: state.drainageGeo });
+    map.addLayer({ id: 'drainage-fill', type: 'fill', source: 'drainage', layout: { visibility: 'none' },
+      paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0.82 } }, firstLabel);
+    map.addLayer({ id: 'drainage-line', type: 'line', source: 'drainage', layout: { visibility: 'none' },
+      paint: { 'line-color': '#0b3c5d', 'line-width': ['interpolate', ['linear'], ['zoom'], 3, 0.4, 8, 1.4], 'line-opacity': 0.5 } }, firstLabel);
+  }
+  // yield fades where the crop is barely seeded (feature-state 'yg' = share of the region's
+  // own peak planting); unknown (no seeded data) coalesces to 1 so it stays full strength.
+  map.addLayer({ id: 'yield-fill', type: 'fill', source: 'ed', layout: { visibility: 'none' },
+    paint: { 'fill-color': 'rgba(0,0,0,0)',
+      'fill-opacity': ['interpolate', ['linear'], ['coalesce', fs('yg'), 1], 0, 0.12, 0.05, 0.78] } }, firstLabel);
   map.addLayer({ id: 'hit', type: 'fill', source: 'ed', paint: { 'fill-color': '#000', 'fill-opacity': 0 } }, firstLabel);
   map.addLayer({ id: 'lines', type: 'line', source: 'ed',
     paint: { 'line-color': '#34413a', 'line-width': ['interpolate', ['linear'], ['zoom'], 3, 0.2, 8, 1], 'line-opacity': 0.45 } }, firstLabel);
@@ -170,6 +214,33 @@ map.on('load', async () => {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, ['*', sq, 0.45], 6, ['*', sq, 1.3], 9, ['*', sq, 3]],
       'circle-color': grpColor, 'circle-opacity': ['case', isNum('crop'), 0.88, 0],
       'circle-stroke-color': '#fff', 'circle-stroke-width': ['case', isNum('crop'), 0.8, 0],
+    } });
+
+  // farm-support payment labels: one dollar figure per province (no colour fill)
+  const labelFont = map.getStyle().layers.find((l) => l.type === 'symbol' && l.layout?.['text-font'])?.layout['text-font'] || ['Noto Sans Regular'];
+  map.addSource('finance-pts', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({ id: 'finance-labels', type: 'symbol', source: 'finance-pts', layout: {
+      visibility: 'none',
+      'text-field': ['get', 'label'],
+      'text-font': labelFont,
+      'text-size': ['interpolate', ['linear'], ['zoom'], 3, 12, 6, 17, 9, 22],
+      'text-allow-overlap': false,
+      'text-padding': 4,
+    }, paint: {
+      'text-color': ['coalesce', ['get', 'color'], '#8c3a10'], 'text-halo-color': '#fff', 'text-halo-width': 2, 'text-halo-blur': 0.4,
+    } });
+
+  // irrigation volume labels: one m³ figure per province
+  map.addSource('irrigation-pts', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({ id: 'irrigation-labels', type: 'symbol', source: 'irrigation-pts', layout: {
+      visibility: 'none',
+      'text-field': ['get', 'label'],
+      'text-font': labelFont,
+      'text-size': ['interpolate', ['linear'], ['zoom'], 3, 12, 6, 17, 9, 22],
+      'text-allow-overlap': false,
+      'text-padding': 4,
+    }, paint: {
+      'text-color': '#0b3c5d', 'text-halo-color': '#fff', 'text-halo-width': 2, 'text-halo-blur': 0.4,
     } });
 
   map.on('sourcedata', function onData(e) {
@@ -552,6 +623,9 @@ function paintAll() {
   paintClimate();
   paintCrops();
   paintYield();
+  paintSeeded();
+  paintFinance();
+  paintIrrigation();
 }
 
 function paintClimate() {
@@ -686,26 +760,463 @@ function yieldDomain(code, mode) {
   return (state.yieldDomains[key] = dom);
 }
 
+// Bivariate "did the effort pay off" palette. index = resultClass*3 + effortClass.
+//   effort (how much was seeded in the region): 0 little, 1 some, 2 lots  -> left to right
+//   result (yield vs the ecodistrict's own average): 0 below, 1 near, 2 above -> bottom to top
+// So the bottom-right (planted lots, yielded poorly) is the loud red; top-right (lots + good)
+// is the strong green; the left column (barely planted) stays pale.
+const BIV = [
+  '#e3cac9', '#d98c86', '#c0202a', // below average: little -> lots seeded
+  '#e2e2e2', '#bdbdbd', '#8a8a8a', // near average
+  '#cfe6cf', '#86c08a', '#1a9641', // above average
+];
+const bivEffortCuts = {};
+
+// terciles of seeded hectares for a crop, pooled over every region and year
+function effortCuts(code) {
+  if (bivEffortCuts[code]) return bivEffortCuts[code];
+  const i = state.seeded ? state.seededIdx[code] : null;
+  const vals = [];
+  if (i != null) for (const rows of Object.values(state.seeded.cars)) for (const v of rows[i]) if (v != null && v > 0) vals.push(v);
+  return (bivEffortCuts[code] = vals.length ? [quantile(vals, 0.34), quantile(vals, 0.67)] : null);
+}
+
+// bivariate class 0..8, or null where the crop isn't grown / has no seeded data
+function bivClass(id, year, code) {
+  const cuts = effortCuts(code);
+  if (!cuts) return null;
+  const sv = seededValue(id, year, code);
+  if (sv == null || sv <= 0) return null;
+  const e = sv < cuts[0] ? 0 : sv < cuts[1] ? 1 : 2;
+  const pct = yieldValue(id, year, code, 'anom');
+  const r = pct == null ? 1 : pct < -5 ? 0 : pct > 5 ? 2 : 1;
+  return r * 3 + e;
+}
+
+function bivLegendHtml() {
+  let cells = '';
+  for (const r of [2, 1, 0]) for (const e of [0, 1, 2]) {
+    cells += `<i style="display:block;width:13px;height:13px;background:${BIV[r * 3 + e]}"></i>`;
+  }
+  return `<div style="display:flex;align-items:center;gap:7px;font-size:11px;line-height:1.3">` +
+    `<div style="display:grid;grid-template-columns:repeat(3,13px);grid-auto-rows:13px;gap:1px">${cells}</div>` +
+    `<div><div>▲ yield above average</div><div>▶ more seeded</div>` +
+    `<div><b style="color:#c0202a">red</b> tried hard, poor · <b style="color:#1a9641">green</b> tried hard, good</div></div></div>`;
+}
+
+const YIELD_FADE = ['interpolate', ['linear'], ['coalesce', ['feature-state', 'yg'], 1], 0, 0.12, 0.05, 0.78];
+
 function paintYield() {
   if (!state.yield) { $('#yield-text').textContent = 'No yield data yet (run scripts/build_yield.py).'; return; }
   const code = state.yieldCrop, mode = state.yieldMode;
   const label = state.yield.crops[state.yieldIdx[code]][1];
   const year = yieldYear();
   const exact = year === tYear(state.t);
-  const dom = yieldDomain(code, mode);
-  const colors = mode === 'anom' ? RAMPS.anomWet : RAMPS.awhc;
-  $('#yield-ramp').innerHTML = mode === 'anom'
-    ? `<span>${signed(dom[0], 0)}%</span><i style="background:linear-gradient(90deg,${colors.join(',')})"></i><span>${signed(dom[1], 0)}% vs avg</span>`
-    : `<span>${fmt(dom[0], 0)}</span><i style="background:linear-gradient(90deg,${colors.join(',')})"></i><span>${fmt(dom[1], 0)} kg/ha</span>`;
-  $('#yield-text').innerHTML = `<b>${esc(label)}</b> yield for <b>${year}</b>` +
-    `${exact ? '' : ` (nearest year to ${tYear(state.t)}; record is ${state.yield.y0}–${state.yield.y1})`}, ` +
-    (mode === 'anom'
-      ? 'shown as % above (teal) or below (brown) each ecodistrict’s own long-term average.'
-      : 'averaged across the Soil Landscape polygons in each ecodistrict.');
+  const seededHere = state.seeded && (code in state.seededIdx);
+  const nearStr = `${year}${exact ? '' : ` (nearest year to ${tYear(state.t)}; record is ${state.yield.y0}–${state.yield.y1})`}`;
+
+  if (mode === 'biv') {
+    $('#yield-ramp').innerHTML = bivLegendHtml();
+    $('#yield-text').innerHTML = `<b>${esc(label)}</b>, ${nearStr}: colour crosses <b>how much was seeded</b> in the ` +
+      'region (pale → saturated) with <b>yield vs the ecodistrict’s own average</b> (red below, green above). ' +
+      'Red = they planted a lot but it yielded poorly; green = planted a lot and did well; pale = barely grown.' +
+      (seededHere ? '' : ' No seeded-area data for this crop, so this view is blank.');
+  } else {
+    const dom = yieldDomain(code, mode);
+    const colors = mode === 'anom' ? RAMPS.anomWet : RAMPS.awhc;
+    $('#yield-ramp').innerHTML = mode === 'anom'
+      ? `<span>${signed(dom[0], 0)}%</span><i style="background:linear-gradient(90deg,${colors.join(',')})"></i><span>${signed(dom[1], 0)}% vs avg</span>`
+      : `<span>${fmt(dom[0], 0)}</span><i style="background:linear-gradient(90deg,${colors.join(',')})"></i><span>${fmt(dom[1], 0)} kg/ha</span>`;
+    $('#yield-text').innerHTML = `<b>${esc(label)}</b> yield for <b>${nearStr}</b>, ` +
+      (mode === 'anom'
+        ? 'shown as % above (teal) or below (brown) each ecodistrict’s own long-term average.'
+        : 'averaged across the Soil Landscape polygons in each ecodistrict.') +
+      (seededHere ? ' Regions where the crop is <b>barely seeded</b> are faded out — the yield there is modelled, not meaningful.' : '');
+  }
+
   if (!mapReady() || !map.getLayer('yield-fill') || !$('#lyr-yield').checked) return;
-  map.setPaintProperty('yield-fill', 'fill-color', rampExpr('y', colors, dom));
-  for (const id of state.ids) {
-    map.setFeatureState({ source: 'ed', id }, { y: yieldValue(id, year) });
+  if (mode === 'biv') {
+    map.setPaintProperty('yield-fill', 'fill-opacity', 0.82);
+    map.setPaintProperty('yield-fill', 'fill-color',
+      ['match', ['coalesce', ['feature-state', 'yb'], -1], ...BIV.flatMap((c, i) => [i, c]), 'rgba(0,0,0,0)']);
+    for (const id of state.ids) map.setFeatureState({ source: 'ed', id }, { yb: bivClass(id, year, code) });
+  } else {
+    const dom = yieldDomain(code, mode);
+    const colors = mode === 'anom' ? RAMPS.anomWet : RAMPS.awhc;
+    map.setPaintProperty('yield-fill', 'fill-opacity', YIELD_FADE);
+    map.setPaintProperty('yield-fill', 'fill-color', rampExpr('y', colors, dom));
+    for (const id of state.ids) {
+      map.setFeatureState({ source: 'ed', id }, { y: yieldValue(id, year), yg: grownFrac(id, year, code) });
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Seeded area (how much of a crop was actually planted; region-level context for yield)
+// StatCan publishes it by Small Area Data Region / Census Agricultural Region, so every
+// ecodistrict takes its region's figure (data/seeded.json maps ecodistrict -> region).
+// ---------------------------------------------------------------------------
+function seededYear() {
+  const s = state.seeded;
+  return s ? Math.max(s.y0, Math.min(s.y1, tYear(state.t))) : null;
+}
+
+// seeded-area series (ha per year) for an ecodistrict's region and a crop, or null
+function seededSeries(id, code) {
+  const s = state.seeded;
+  if (!s) return null;
+  const car = s.eco2car[id];
+  const i = state.seededIdx[code];
+  const rows = car == null ? null : s.cars[car];
+  return rows && i != null ? rows[i] : null;
+}
+
+function seededValue(id, year, code = state.seededCrop) {
+  const ser = seededSeries(id, code);
+  return ser ? (ser[year - state.seeded.y0] ?? null) : null;
+}
+
+// the region's own peak planting of this crop, as a yardstick for "barely grown"
+function seededPeak(id, code) {
+  const car = state.seeded?.eco2car[id];
+  if (car == null) return null;
+  const key = `${car}.${code}`;
+  if (key in state.seededMaxCache) return state.seededMaxCache[key];
+  const ser = seededSeries(id, code);
+  let mx = 0;
+  if (ser) for (const v of ser) if (v != null && v > mx) mx = v;
+  return (state.seededMaxCache[key] = mx || null);
+}
+
+// how much of the crop was planted this year, as a share of the region's own peak:
+//   null  -> the ecodistrict has no seeded-area region (unknown; don't fade the yield)
+//   0     -> region is covered but the crop is never/barely grown there (fade the yield)
+//   0..1  -> this year's planting relative to the region's busiest year
+function grownFrac(id, year, code) {
+  if (!state.seeded || !(code in state.seededIdx)) return null;  // no seeded data for this crop
+  const car = state.seeded.eco2car[id];
+  if (car == null) return null;              // outside the seeded-area coverage
+  const mx = seededPeak(id, code);
+  if (!mx) return 0;                         // region grows essentially none of this crop
+  return (seededValue(id, year, code) || 0) / mx;
+}
+
+// colour range (hectares) for a crop over every region and year, cached
+function seededDomain(code) {
+  if (state.seededDomains[code]) return state.seededDomains[code];
+  const i = state.seededIdx[code];
+  const vals = [];
+  for (const rows of Object.values(state.seeded.cars)) {
+    for (const v of rows[i]) if (v != null) vals.push(v);
+  }
+  let dom = [0, 1];
+  if (vals.length) dom = [0, Math.max(1, quantile(vals, 0.98))];
+  return (state.seededDomains[code] = dom);
+}
+
+const areaFmt = (v) => (v == null ? '–' : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M ha`
+  : v >= 1e3 ? `${Math.round(v / 1e3)}k ha` : `${Math.round(v)} ha`);
+
+function paintSeeded() {
+  if (!state.seeded) { $('#seeded-text').textContent = 'No seeded-area data yet (run scripts/build_seeded.py).'; return; }
+  const code = state.seededCrop;
+  const label = state.seeded.crops[state.seededIdx[code]][1];
+  const year = seededYear();
+  const exact = year === tYear(state.t);
+  const dom = seededDomain(code);
+  const colors = RAMPS.awhc;
+  $('#seeded-ramp').innerHTML = `<span>0</span><i style="background:linear-gradient(90deg,${colors.join(',')})"></i>` +
+    `<span>${areaFmt(dom[1])}</span>`;
+  $('#seeded-text').innerHTML = `<b>${esc(label)}</b> seeded area in <b>${year}</b>` +
+    `${exact ? '' : ` (nearest year to ${tYear(state.t)}; record is ${state.seeded.y0}–${state.seeded.y1})`}, ` +
+    'by Census Agricultural Region (Prairies, BC, Ontario, Quebec). Every ecodistrict shares its region’s total.';
+  if (!mapReady() || !map.getLayer('seeded-fill') || !$('#lyr-seeded').checked) return;
+  map.setPaintProperty('seeded-fill', 'fill-color', rampExpr('sd', colors, dom));
+  for (const id of state.ids) map.setFeatureState({ source: 'ed', id }, { sd: seededValue(id, year) });
+}
+
+// ---------------------------------------------------------------------------
+// Farm support payments (province-level, annual; a proxy for weather losses)
+// ---------------------------------------------------------------------------
+const moneyFmt = (v) => {
+  if (v == null || Number.isNaN(v)) return '–';
+  const a = Math.abs(v), s = v < 0 ? '−' : '';
+  if (a >= 1e9) return `${s}$${(a / 1e9).toFixed(1)}B`;
+  if (a >= 1e6) return `${s}$${Math.round(a / 1e6)}M`;
+  if (a >= 1e3) return `${s}$${Math.round(a / 1e3)}k`;
+  return `${s}$${Math.round(a)}`;
+};
+
+// sample a hex colour ramp at t in [0,1]
+function lerpHex(a, b, f) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const ch = (sh) => Math.round(((pa >> sh) & 255) + (((pb >> sh) & 255) - ((pa >> sh) & 255)) * f);
+  return `#${((1 << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).slice(1)}`;
+}
+function rampColor(colors, t) {
+  t = Math.max(0, Math.min(1, t));
+  const x = t * (colors.length - 1), i = Math.floor(x);
+  return i >= colors.length - 1 ? colors[colors.length - 1] : lerpHex(colors[i], colors[i + 1], x - i);
+}
+
+// annual year with payment data that goes with the slider month (clamped to record)
+function financeYear() {
+  const f = state.finance;
+  return f ? Math.max(f.y0, Math.min(f.y1, tYear(state.t))) : null;
+}
+
+// payment for an ecodistrict = its province's total for that year, or null
+function financeValue(id, year, metric = state.financeMetric) {
+  const f = state.finance;
+  const prov = state.eco.d[id]?.prov;
+  if (!f || !prov) return null;
+  const arr = f.metrics[metric]?.data[prov];
+  return arr ? (arr[year - f.y0] ?? null) : null;
+}
+
+// each province's own average over the record - the baseline the shading compares to
+function financeMean(metric) {
+  if (state.financeMeans[metric]) return state.financeMeans[metric];
+  const out = {};
+  for (const [prov, arr] of Object.entries(state.finance.metrics[metric].data)) {
+    let s = 0, c = 0;
+    for (const v of arr) if (v != null) { s += v; c++; }
+    out[prov] = c ? s / c : null;
+  }
+  return (state.financeMeans[metric] = out);
+}
+
+// one label anchor per province: area-weighted centre of its ecodistrict label points
+function provincePoints() {
+  if (state.provPts) return state.provPts;
+  const acc = {};
+  for (const r of Object.values(state.eco.d)) {
+    if (!r.prov || !r.lp) continue;
+    const w = r.area || 1;
+    (acc[r.prov] ||= { x: 0, y: 0, w: 0 });
+    acc[r.prov].x += r.lp[0] * w; acc[r.prov].y += r.lp[1] * w; acc[r.prov].w += w;
+  }
+  const out = {};
+  for (const [p, a] of Object.entries(acc)) out[p] = [a.x / a.w, a.y / a.w];
+  return (state.provPts = out);
+}
+
+function paintFinance() {
+  if (!state.finance) { $('#finance-text').textContent = 'No financial data yet (run scripts/build_financials.py).'; return; }
+  const metric = state.financeMetric, m = state.finance.metrics[metric];
+  const year = financeYear();
+  const exact = year === tYear(state.t);
+  const colors = RAMPS.money;
+  $('#finance-ramp').innerHTML = `<span>below avg</span>` +
+    `<i style="background:linear-gradient(90deg,${colors.join(',')})"></i><span>above avg</span>`;
+  $('#finance-text').innerHTML = `<b>${esc(m.label)}</b> paid to farmers, by province, in <b>${year}</b>` +
+    `${exact ? '' : ` (nearest year to ${tYear(state.t)}; record is ${state.finance.y0}–${state.finance.y1})`}. ` +
+    `${esc(m.desc)} Darker = more than that province's own ${state.finance.y0}–${state.finance.y1} average; drag the timeline to watch spikes.`;
+  if (!mapReady() || !map.getSource('finance-pts')) return;
+  const pts = provincePoints(), means = financeMean(metric);
+  const features = Object.entries(pts).map(([prov, lp]) => {
+    const val = state.finance.metrics[metric].data[prov]?.[year - state.finance.y0];
+    if (val == null) return null;
+    const mean = means[prov];
+    const ratio = mean && mean > 0 ? val / mean : 1;
+    const color = rampColor(colors, (ratio - 0.4) / 1.6); // 0.4x avg -> light, 2.0x -> darkest
+    return { type: 'Feature', properties: { label: moneyFmt(val), color }, geometry: { type: 'Point', coordinates: lp } };
+  }).filter(Boolean);
+  map.getSource('finance-pts').setData({ type: 'FeatureCollection', features });
+}
+
+// ---------------------------------------------------------------------------
+// Irrigation water use (province-level, by growing-season period; census years)
+// Provincial volumes colour the map; the Canada-wide crop breakdown rides along.
+// ---------------------------------------------------------------------------
+const volFmt = (v) => {
+  if (v == null || Number.isNaN(v)) return '–';
+  const a = Math.abs(v);
+  if (a >= 1e9) return `${(v / 1e9).toFixed(2)} bn m³`;
+  if (a >= 1e6) return `${Math.round(v / 1e6)}M m³`;
+  if (a >= 1e3) return `${Math.round(v / 1e3)}k m³`;
+  return `${Math.round(v)} m³`;
+};
+const irrDomainCache = {};
+
+// which season the layer shows: the picker, or (on 'auto') the one the slider month falls in
+function irrigationPeriodKey() {
+  if (state.irrigationPeriod !== 'auto') return state.irrigationPeriod;
+  return IRR_MONTH_PERIOD[state.t % 12] || 'total';
+}
+
+// nearest surveyed (even) year to the slider's year
+function irrigationYear() {
+  const ys = state.irrigation.years;
+  const y = tYear(state.t);
+  return ys.reduce((best, yy) => (Math.abs(yy - y) < Math.abs(best - y) ? yy : best), ys[0]);
+}
+
+const irrMeanCache = {};
+// the area's series (m³ per survey year) for a geography + season
+function irrigationSeries(geo, period, key) {
+  return state.irrigation[geo === 'basin' ? 'basin' : 'prov'][period]?.[key] || null;
+}
+// the area's own average over the surveyed years - the baseline 'anom' compares to
+function irrigationMean(geo, period, key) {
+  const ck = `${geo}.${period}.${key}`;
+  if (ck in irrMeanCache) return irrMeanCache[ck];
+  const arr = irrigationSeries(geo, period, key);
+  let s = 0, c = 0;
+  if (arr) for (const v of arr) if (v != null) { s += v; c++; }
+  return (irrMeanCache[ck] = c ? s / c : null);
+}
+// value for a year: raw m³, or the % above/below that area's own average
+function irrigationValue(geo, period, key, yi, mode = state.irrigationMode) {
+  const arr = irrigationSeries(geo, period, key);
+  const v = arr ? (arr[yi] ?? null) : null;
+  if (v == null || mode === 'value') return v;
+  const m = irrigationMean(geo, period, key);
+  return m ? (v - m) / m * 100 : null;
+}
+
+// colour ceiling (98th pct) over every area and year for a season + geography, cached.
+// value mode: [0, hi] m³; anom mode: a symmetric ±hi %.
+function irrigationDomain(period, geo, mode = state.irrigationMode) {
+  const ck = `${mode}.${geo}.${period}`;
+  if (irrDomainCache[ck]) return irrDomainCache[ck];
+  const series = state.irrigation[geo === 'basin' ? 'basin' : 'prov'][period] || {};
+  const vals = [];
+  for (const key of Object.keys(series)) {
+    for (let yi = 0; yi < state.irrigation.years.length; yi++) {
+      const v = irrigationValue(geo, period, key, yi, mode);
+      if (v != null) vals.push(v);
+    }
+  }
+  const hi = mode === 'anom'
+    ? (vals.length ? Math.max(5, quantile(vals.map(Math.abs), 0.97)) : 50)
+    : (vals.length ? Math.max(1, quantile(vals, 0.98)) : 1);
+  return (irrDomainCache[ck] = hi);
+}
+
+// --- drainage-basin geometry helpers (label anchors + which basin an ecodistrict sits in) ---
+function ringCentroid(ring) {
+  let x = 0, y = 0, a = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const f = ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+    a += f; x += (ring[j][0] + ring[i][0]) * f; y += (ring[j][1] + ring[i][1]) * f;
+  }
+  if (Math.abs(a) < 1e-12) {
+    let sx = 0, sy = 0; for (const p of ring) { sx += p[0]; sy += p[1]; }
+    return [sx / ring.length, sy / ring.length];
+  }
+  return [x / (3 * a), y / (3 * a)];
+}
+// label point per basin: centroid of its largest ring
+function basinPoints() {
+  if (state.basinPts) return state.basinPts;
+  const out = {};
+  for (const f of state.drainageGeo?.features || []) {
+    const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+    let best = null, bestA = -1;
+    for (const poly of polys) {
+      let a = 0, r = poly[0];
+      for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += r[j][0] * r[i][1] - r[i][0] * r[j][1];
+      if (Math.abs(a) > bestA) { bestA = Math.abs(a); best = r; }
+    }
+    if (best) out[f.id] = ringCentroid(best);
+  }
+  return (state.basinPts = out);
+}
+function pointInRing(pt, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+    if (((yi > pt[1]) !== (yj > pt[1])) && (pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+// which drainage basin a lon/lat falls in (outer ring hit, not in a hole), or null
+function basinOf(id) {
+  if (id in state.eco2basin) return state.eco2basin[id];
+  const lp = state.eco.d[id]?.lp;
+  let key = null;
+  if (lp) for (const f of state.drainageGeo?.features || []) {
+    const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+    for (const poly of polys) {
+      if (pointInRing(lp, poly[0]) && !poly.slice(1).some((h) => pointInRing(lp, h))) { key = f.id; break; }
+    }
+    if (key) break;
+  }
+  return (state.eco2basin[id] = key);
+}
+
+// Alberta dwarfs every other province, so spread the colour on a sqrt scale
+function irrRampExpr(prop, colors, hi) {
+  const n = colors.length;
+  const stops = colors.flatMap((c, i) => [Math.pow(i / (n - 1), 2) * hi, c]);
+  return ['case', ['==', ['typeof', ['feature-state', prop]], 'number'],
+    ['interpolate', ['linear'], ['feature-state', prop], ...stops], 'rgba(0,0,0,0)'];
+}
+
+// Canada-wide split of the season's water by crop type, as a stacked bar + legend
+function irrigationCropBar(period, year) {
+  const irr = state.irrigation;
+  const yi = irr.years.indexOf(year);
+  const parts = irr.cropTypes.map((c) => [c, irr.crops[period]?.[c]?.[yi]]).filter(([, v]) => v != null && v > 0);
+  const total = parts.reduce((s, [, v]) => s + v, 0);
+  if (!total) return '<p class="small muted">No Canada-wide crop breakdown for this season and year.</p>';
+  const bar = parts.map(([c, v]) =>
+    `<i style="width:${(v / total * 100).toFixed(2)}%;background:${IRR_CROP_COLORS[c] || '#999'}" title="${esc(c)}: ${volFmt(v)}"></i>`).join('');
+  const legend = [...parts].sort((a, b) => b[1] - a[1]).map(([c, v]) =>
+    `<span><i class="sw" style="background:${IRR_CROP_COLORS[c] || '#999'}"></i>${esc(c)} ${(v / total * 100).toFixed(0)}%</span>`).join('');
+  return `<div class="muted small">Canada-wide, by crop (${volFmt(total)} total):</div>` +
+    `<div class="irr-bar">${bar}</div><div class="cats">${legend}</div>`;
+}
+
+function paintIrrigation() {
+  if (!state.irrigation) { $('#irrigation-text').textContent = 'No irrigation data yet (run scripts/build_irrigation.py).'; return; }
+  const irr = state.irrigation;
+  const basin = state.irrigationGeo === 'basin' && state.drainageGeo;
+  const geo = basin ? 'basin' : 'prov';
+  const mode = state.irrigationMode;
+  const period = irrigationPeriodKey();
+  const year = irrigationYear();
+  const yi = irr.years.indexOf(year);
+  const exact = year === tYear(state.t);
+  const plabel = irr.periods[period];
+  const hi = irrigationDomain(period, geo, mode);
+  // value: sequential blue ramp [0,hi], sqrt-scaled; anom: diverging ramp ±hi %, linear
+  const colors = mode === 'anom' ? RAMPS.anomWet : RAMPS.wet;
+  const label = (key) => { const v = irrigationValue(geo, period, key, yi, mode); return v == null ? null : mode === 'anom' ? `${signed(v, 0)}%` : volFmt(v); };
+  $('#irrigation-ramp').innerHTML = mode === 'anom'
+    ? `<span>${signed(-hi, 0)}%</span><i style="background:linear-gradient(90deg,${colors.join(',')})"></i><span>${signed(hi, 0)}% vs avg</span>`
+    : `<span>0</span><i style="background:linear-gradient(90deg,${colors.join(',')})"></i><span>${volFmt(hi)}</span>`;
+  $('#irrigation-crops').innerHTML = irrigationCropBar(period, year);
+  $('#irrigation-text').innerHTML = `Irrigation water applied, <b>${esc(plabel)}</b>${period === 'total' ? '' : ' of the growing season'}, in <b>${year}</b>` +
+    `${exact ? '' : ` (nearest survey year to ${tYear(state.t)}; surveyed ${irr.years[0]}–${irr.years[irr.years.length - 1]}, every 2nd year)`}. ` +
+    (mode === 'anom'
+      ? `Shown as % above (teal) or below (brown) each ${basin ? 'basin' : 'province'}’s own ${irr.years[0]}–${irr.years[irr.years.length - 1]} average for this season. `
+      : (state.irrigationPeriod === 'auto'
+        ? `The season tracks the timeline — ${MONTHS[state.t % 12]} shows ${period === 'total' ? 'the full-season total (outside the irrigation season)' : esc(plabel)}. ` : '')) +
+    (basin
+      ? 'By <b>drainage basin</b> (watershed) — a finer, sub-provincial cut that isolates e.g. the South Saskatchewan. Surveyed basins cover the farmed south only.'
+      : 'Each ecodistrict shares its province’s total.');
+  if (!mapReady() || !$('#lyr-irrigation').checked) return;
+  const rampExprFor = mode === 'anom' ? rampExpr('irr', colors, [-hi, hi]) : irrRampExpr('irr', colors, hi);
+  if (basin) {
+    if (map.getLayer('drainage-fill')) map.setPaintProperty('drainage-fill', 'fill-color', rampExprFor);
+    for (const k of Object.keys(irr.basins)) map.setFeatureState({ source: 'drainage', id: k }, { irr: irrigationValue(geo, period, k, yi, mode) });
+  } else if (map.getLayer('irrigation-fill')) {
+    map.setPaintProperty('irrigation-fill', 'fill-color', rampExprFor);
+    for (const id of state.ids) {
+      const prov = state.eco.d[id]?.prov;
+      map.setFeatureState({ source: 'ed', id }, { irr: prov ? irrigationValue(geo, period, prov, yi, mode) : null });
+    }
+  }
+  if (map.getSource('irrigation-pts')) {
+    const anchors = basin ? basinPoints() : provincePoints();
+    const features = Object.entries(anchors).map(([k, lp]) => {
+      const txt = lp ? label(k) : null;
+      if (txt == null) return null;
+      return { type: 'Feature', properties: { label: txt }, geometry: { type: 'Point', coordinates: lp } };
+    }).filter(Boolean);
+    map.getSource('irrigation-pts').setData({ type: 'FeatureCollection', features });
   }
 }
 
@@ -721,10 +1232,19 @@ function applyLayers() {
   vis('climate-fill', $('#lyr-climate').checked);
   vis('soil-fill', $('#lyr-soil').checked);
   vis('yield-fill', $('#lyr-yield').checked);
+  vis('seeded-fill', $('#lyr-seeded').checked);
+  vis('finance-labels', $('#lyr-finance').checked);
+  const irrOn = $('#lyr-irrigation').checked, basin = state.irrigationGeo === 'basin' && state.drainageGeo;
+  vis('irrigation-fill', irrOn && !basin);
+  vis('irrigation-labels', irrOn);
+  if (map.getLayer('drainage-fill')) { vis('drainage-fill', irrOn && !!basin); vis('drainage-line', irrOn && !!basin); }
   vis('crops', $('#lyr-crops').checked);
   vis('lines', $('#lyr-lines').checked);
   if ($('#lyr-soil').checked) paintSoil();
   if ($('#lyr-yield').checked) paintYield();
+  if ($('#lyr-seeded').checked) paintSeeded();
+  if ($('#lyr-finance').checked) paintFinance();
+  if ($('#lyr-irrigation').checked) paintIrrigation();
 }
 
 // ---------------------------------------------------------------------------
@@ -765,6 +1285,39 @@ function showTip(id, pt) {
     if (raw != null) {
       const pct = yieldValue(id, year, code, 'anom');
       h += `<div>${esc(label)} yield ${year}: <b>${fmt(raw, 0)}</b> kg/ha` +
+        (pct == null ? '' : ` <span class="muted">(${signed(pct, 0)}% vs avg)</span>`) + '</div>';
+      const sv = seededValue(id, year, code), fr = grownFrac(id, year, code);
+      if (fr != null && fr < 0.05) h += `<div class="muted"><b>Barely grown here</b> (${sv == null ? '~0' : areaFmt(sv)} seeded) — the yield is modelled noise</div>`;
+      else if (sv != null) h += `<div class="muted">Seeded in region: ${areaFmt(sv)}</div>`;
+    }
+  }
+  if ($('#lyr-seeded').checked && state.seeded) {
+    const year = seededYear(), code = state.seededCrop;
+    const label = state.seeded.crops[state.seededIdx[code]][1];
+    const sv = seededValue(id, year, code);
+    const car = state.seeded.eco2car[id];
+    h += `<div>${esc(label)} seeded ${year}: <b>${sv == null ? '–' : areaFmt(sv)}</b>` +
+      (car == null ? ' <span class="muted">(no region data)</span>' : '') + '</div>';
+  }
+  if ($('#lyr-finance').checked && state.finance) {
+    const prov = state.eco.d[id]?.prov;
+    const year = financeYear();
+    const val = financeValue(id, year);
+    if (prov) h += `<div>${esc(state.finance.metrics[state.financeMetric].label)}, ${esc(state.finance.provinces[prov] || prov)} ${year}: <b>${moneyFmt(val)}</b></div>`;
+  }
+  if ($('#lyr-irrigation').checked && state.irrigation) {
+    const geo = state.irrigationGeo === 'basin' && state.drainageGeo ? 'basin' : 'prov';
+    const period = irrigationPeriodKey();
+    const year = irrigationYear();
+    const yi = state.irrigation.years.indexOf(year);
+    const pl = esc(state.irrigation.periods[period]);
+    const key = geo === 'basin' ? basinOf(id) : state.eco.d[id]?.prov;
+    if (geo === 'basin' && !key) h += '<div class="muted">Outside the surveyed irrigation basins</div>';
+    else if (key) {
+      const raw = irrigationValue(geo, period, key, yi, 'value');
+      const pct = irrigationValue(geo, period, key, yi, 'anom');
+      const where = geo === 'basin' ? `, ${esc(state.irrigation.basins[key])} basin` : '';
+      h += `<div>Irrigation (${pl}) ${year}${where}: <b>${volFmt(raw)}</b>` +
         (pct == null ? '' : ` <span class="muted">(${signed(pct, 0)}% vs avg)</span>`) + '</div>';
     }
   }
@@ -981,7 +1534,35 @@ function buildUI() {
   yc.addEventListener('change', () => { state.yieldCrop = yc.value; paintYield(); });
   $('#yield-mode').addEventListener('change', (e) => { state.yieldMode = e.target.value; paintYield(); });
 
-  for (const id of ['lyr-climate', 'lyr-soil', 'lyr-crops', 'lyr-yield', 'lyr-lines']) {
+  // seeded-area crop picker
+  const sc = $('#seeded-crop');
+  if (state.seeded) {
+    sc.innerHTML = state.seeded.crops.map(([code, label]) => `<option value="${code}">${esc(label)}</option>`).join('');
+    sc.value = state.seededCrop;
+  }
+  sc.addEventListener('change', () => { state.seededCrop = sc.value; paintSeeded(); });
+
+  // farm-support payment metric picker
+  const fm = $('#finance-metric');
+  if (state.finance) {
+    fm.innerHTML = Object.entries(state.finance.metrics).map(([k, v]) => `<option value="${k}">${esc(v.label)}</option>`).join('');
+    fm.value = state.financeMetric;
+  }
+  fm.addEventListener('change', () => { state.financeMetric = fm.value; paintFinance(); });
+
+  // irrigation season + geography pickers
+  const ip = $('#irrigation-period');
+  if (ip) ip.addEventListener('change', () => { state.irrigationPeriod = ip.value; paintIrrigation(); });
+  const ig = $('#irrigation-geo');
+  if (ig) {
+    if (!state.drainageGeo) { ig.value = 'prov'; ig.disabled = true; }
+    else ig.value = state.irrigationGeo;
+    ig.addEventListener('change', () => { state.irrigationGeo = ig.value; applyLayers(); });
+  }
+  const im = $('#irrigation-mode');
+  if (im) im.addEventListener('change', () => { state.irrigationMode = im.value; paintIrrigation(); });
+
+  for (const id of ['lyr-climate', 'lyr-soil', 'lyr-crops', 'lyr-yield', 'lyr-seeded', 'lyr-finance', 'lyr-irrigation', 'lyr-lines']) {
     $('#' + id).addEventListener('change', () => { applyLayers(); if (id === 'lyr-crops') paintCrops(); });
   }
   syncLegends();

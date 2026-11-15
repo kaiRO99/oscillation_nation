@@ -174,3 +174,34 @@ h2 { display: flex; align-items: center; gap: 6px; }
 .irr-bar i { display: block; height: 100%; }
 #info-pop .cats { color: #d4dad6; }
 #info-pop .muted, #info-pop .small { color: #c6ccc8; }
+
+/* ---------- match report ---------- */
+.m-open { float: right; color: #b35c00; font-weight: 600; opacity: 0; }
+.matches li:hover .m-open { opacity: 1; }
+.report h3 { font-size: 15px; margin: 8px 0 2px; }
+.rep-sub { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.rep-nav { display: flex; gap: 6px; align-items: center; }
+.rep-nav button { border: 1px solid #cfcabd; background: #fff; border-radius: 5px; padding: 3px 8px; font-size: 12px; }
+.rep-nav button:hover { background: #f1efe8; }
+.rep-nav .rep-print { margin-left: auto; }
+.rep-lead { background: #fff3e3; border-radius: 6px; padding: 7px 9px; font-size: 12.5px; margin: 8px 0 4px; }
+.report h4 { display: flex; align-items: center; gap: 6px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); margin: 12px 0 4px; }
+.rep-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.rep-table th, .rep-table td { text-align: left; padding: 3px 4px; border-top: 1px solid var(--line); vertical-align: top; }
+.rep-table thead th { border-top: 0; color: var(--muted); font-weight: 600; font-size: 11px; }
+.rep-table tbody th { font-weight: 500; color: var(--muted); white-space: nowrap; }
+.rep-table .up { color: #0f6b4c; } .rep-table .down { color: #a3361b; }
+.rep-facts { margin: 0; padding-left: 16px; font-size: 12.5px; }
+.rep-facts li { margin: 3px 0; }
+.rep-yields { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 2px; }
+.rep-yields .up b { color: #0f6b4c; } .rep-yields .down b { color: #a3361b; }
+.rep-foot { font-size: 11px; color: var(--muted); margin-top: 12px; }
+.rep-link { word-break: break-all; }
+
+@media print {
+  #map, #panel, #tip, #info-pop, .maplibregl-control-container, .rep-nav, .collapse, #sim .field, .info { display: none !important; }
+  body { overflow: visible; background: #fff; }
+  #sim { position: static; width: auto; max-height: none; box-shadow: none; }
+  #sim .body { overflow: visible; }
+}

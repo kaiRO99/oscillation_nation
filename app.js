@@ -68,6 +68,7 @@ const state = {
   oni: [], enso: [], oniFc: [], classes: {},
   nObs: 0, nowT: null, kinds: [], // months < nObs are NASA POWER; later ones come from Meteomatics
   simMeta: null, simCache: {}, sel: null, matches: [], shownMatches: new Set(), hover: null,
+  report: null, focusId: null, // the match whose report is open: { id, t, score, qt }
 };
 
 // ---------------------------------------------------------------------------
@@ -154,7 +155,7 @@ const uiReady = dataReady.then(async ([oni, eco, meta, aci, simMeta, oniFc, yiel
   await loadVar(state.climateVar);
   setMonth(state.t);
   const qd = Number(q.get('d'));
-  if (qd && eco.d[qd]) selectDistrict(qd, { fly: false });
+  if (qd && eco.d[qd]) selectDistrict(qd, { fly: false }).then(openReportFromUrl);
 }).catch((e) => {
   console.error(e);
   $('#oni-text').textContent = 'Could not load the data files. Run the scripts in scripts/ first (see README).';
@@ -200,6 +201,8 @@ map.on('load', async () => {
     paint: { 'line-color': '#b35c00', 'line-width': ['case', isNum('match'), 1.6, 0] } });
   map.addLayer({ id: 'hover-line', type: 'line', source: 'ed',
     paint: { 'line-color': '#111', 'line-width': ['case', ['boolean', fs('hover'), false], 1.6, 0] } });
+  map.addLayer({ id: 'focus-line', type: 'line', source: 'ed',
+    paint: { 'line-color': '#5a2d00', 'line-width': ['case', ['boolean', fs('focus'), false], 3.5, 0], 'line-dasharray': [2, 1] } });
   map.addLayer({ id: 'sel-line', type: 'line', source: 'ed',
     paint: { 'line-color': '#111', 'line-width': ['case', ['boolean', fs('sel'), false], 3, 0] } });
 
@@ -1343,7 +1346,9 @@ async function selectDistrict(id, { fly = true } = {}) {
   id = Number(id);
   if (!state.eco.d[id]) return;
   if (state.sel != null && mapReady()) map.setFeatureState({ source: 'ed', id: state.sel }, { sel: false });
+  const keepR = state.sel == null; // first selection on page load keeps a ?r= report link
   state.sel = id;
+  if (keepR) { state.report = null; setFocus(null); } else closeReport(false);
   $('#sim').classList.remove('collapsed');
   $('#sim-search').value = `${id} · ${districtName(id)}`;
   if (mapReady()) map.setFeatureState({ source: 'ed', id }, { sel: true });
@@ -1434,6 +1439,11 @@ function renderSim() {
       state.shownMatches.add(m.id);
     }
   }
+  if (state.report) {
+    you.innerHTML = '';
+    res.innerHTML = reportHtml(state.report);
+    return;
+  }
   const head = isExt(state.t)
     ? `<h2>${isFuture(state.t) ? 'Forecast' : 'This month'} is most like ${infoHtml('Compared on what Meteomatics provides (temperature, precipitation, humidity, wind, sun, snow depth, frost days) plus soil; soil wetness and evapotranspiration are not forecast.')}</h2>`
     : `<h2>Most similar ${MONTHS[state.t % 12]}s</h2>`;
@@ -1443,11 +1453,240 @@ function renderSim() {
       <div class="m-top"><span class="rank">${m.rank}</span><b>${tLabel(m.t)}</b> ${ensoChip(m.t)}<span class="score">${m.score}</span></div>
       <div class="bar"><i style="width:${m.score}%"></i></div>
       <div class="muted">Ecodistrict ${m.id} · ${esc(districtName(m.id))}</div>
-      <div class="m-vals">${fmt(q.temp)} °C · ${fmt(q.precip, 0)} mm · wetness ${fmt(q.wet, 2)}</div>
+      <div class="m-vals">${fmt(q.temp)} °C · ${fmt(q.precip, 0)} mm · wetness ${fmt(q.wet, 2)}<span class="m-open">Report ›</span></div>
     </li>`;
   }).join('') + '</ol>';
 }
 
+
+// ---------------------------------------------------------------------------
+// Match report: click a match to get a picture of that place - why it matched, what happened next
+// there, how its farms did that season, and what it is like in general.
+// ---------------------------------------------------------------------------
+const REPORT_VARS = ['T2M', 'PRECIP', 'GWETROOT', 'FROST_DAYS', 'SNODP'];
+
+async function openReport(m) {
+  await Promise.all(REPORT_VARS.map(loadVar));
+  setFocus(m.id);
+  state.report = { id: m.id, t: m.t, score: m.score, qt: state.t };
+  setReportParam(`${m.id}:${tYear(m.t)}-${String(m.t % 12 + 1).padStart(2, '0')}`);
+  map.flyTo({ center: state.eco.d[m.id].lp, zoom: Math.max(map.getZoom(), 5.5) });
+  renderSim();
+  $('#sim .body').scrollTop = 0;
+}
+
+function setReportParam(v) {
+  const url = new URL(location.href);
+  if (v) url.searchParams.set('r', v); else url.searchParams.delete('r');
+  history.replaceState(null, '', url);
+}
+
+// reopen the report named in the URL, if it is one of the current matches (or at least a known district)
+function openReportFromUrl() {
+  const m = /^(\d+):(\d{4})-(\d{2})$/.exec(new URLSearchParams(location.search).get('r') || '');
+  if (!m || !state.eco.d[m[1]]) return;
+  const id = Number(m[1]), t = (Number(m[2]) - state.y0) * 12 + Number(m[3]) - 1;
+  const hit = state.matches.find((x) => x.id === id && x.t === t);
+  openReport(hit || { id, t, score: '–' });
+}
+
+function closeReport(render = true) {
+  if (state.report) setReportParam(null);
+  state.report = null;
+  setFocus(null);
+  if (render) renderSim();
+}
+
+function setFocus(id) {
+  if (mapReady() && state.focusId != null) map.setFeatureState({ source: 'ed', id: state.focusId }, { focus: false });
+  state.focusId = id;
+  if (mapReady() && id != null) map.setFeatureState({ source: 'ed', id }, { focus: true });
+}
+
+// distance and rough compass direction between two lon/lat points
+function whereFrom(a, b) {
+  const R = 6371, rad = Math.PI / 180;
+  const dLat = (b[1] - a[1]) * rad, dLon = (b[0] - a[0]) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[1] * rad) * Math.cos(b[1] * rad) * Math.sin(dLon / 2) ** 2;
+  const km = 2 * R * Math.asin(Math.sqrt(h));
+  const y = Math.sin(dLon) * Math.cos(b[1] * rad);
+  const x = Math.cos(a[1] * rad) * Math.sin(b[1] * rad) - Math.sin(a[1] * rad) * Math.cos(b[1] * rad) * Math.cos(dLon);
+  const brg = (Math.atan2(y, x) / rad + 360) % 360;
+  const dir = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(brg / 45) % 8];
+  return km < 30 ? 'right next to you' : `${Math.round(km / 10) * 10} km ${dir} of you`;
+}
+
+const pctTxt = (v, nd = 0) => (v == null ? '–' : `${signed(v, nd)}%`);
+const clampYear = (y, ys) => Math.max(ys[0], Math.min(ys[ys.length - 1], y));
+const cls = (v, good = 0) => (v == null ? '' : v > good ? 'up' : v < -good ? 'down' : '');
+
+// the growing season a month "leads into": autumn months lead into next year's season
+const seasonYear = (t) => tYear(t) + (t % 12 >= 9 ? 1 : 0);
+
+function reportHtml(rp) {
+  const me = state.sel, them = rp.id;
+  const R = state.eco.d[them], Y = state.eco.d[me];
+  const rowT = state.rowOf[them], rowY = state.rowOf[me];
+  const gy = seasonYear(rp.t);
+  let h = '';
+
+  // header
+  h += `<div class="report">
+    <div class="rep-nav"><button class="rep-back">‹ Matches</button>
+      <button class="rep-jump" title="Move the timeline to this month">Go to ${tLabel(rp.t)}</button>
+      <button class="rep-print" title="Print or save as PDF">Print</button></div>
+    <h3>Ecodistrict ${them} · ${esc(districtName(them))}</h3>
+    <div class="rep-sub">${tLabel(rp.t)} ${ensoChip(rp.t)} · match <b>${rp.score}</b> · ${whereFrom(Y.lp, R.lp)}</div>
+    <p class="rep-lead">${leadSentence(rp, gy)}</p>`;
+
+  // 1. why it matched
+  const row = (label, a, b, nd, unit = '') => `<tr><th>${label}</th><td>${fmt(a, nd)}${unit}</td><td>${fmt(b, nd)}${unit}</td></tr>`;
+  const cv = (k, r, t) => climate(k, r, t);
+  h += `<h4>Why it matched ${infoHtml(`Your district in ${tLabel(rp.qt)} next to this place in ${tLabel(rp.t)}. The score compares every climate variable for the month plus soil.`)}</h4>
+    <table class="rep-table"><thead><tr><th></th><th>You · ${MONTHS[rp.qt % 12]} ${tYear(rp.qt)}</th><th>Them · ${MONTHS[rp.t % 12]} ${tYear(rp.t)}</th></tr></thead><tbody>
+    ${row('Mean temp', cv('T2M', rowY, rp.qt), cv('T2M', rowT, rp.t), 1, ' °C')}
+    ${row('Precipitation', cv('PRECIP', rowY, rp.qt), cv('PRECIP', rowT, rp.t), 0, ' mm')}
+    ${row('Frost days', cv('FROST_DAYS', rowY, rp.qt), cv('FROST_DAYS', rowT, rp.t), 0)}
+    ${row('Snow depth', cv('SNODP', rowY, rp.qt), cv('SNODP', rowT, rp.t), 0, ' cm')}
+    ${row('Root-zone wetness', cv('GWETROOT', rowY, rp.qt), cv('GWETROOT', rowT, rp.t), 2)}
+    ${Y.soil && R.soil ? `
+    <tr><th>Soil type</th><td>${esc(state.eco.soil_orders[Y.soil.order] ?? '–')}</td><td>${esc(state.eco.soil_orders[R.soil.order] ?? '–')}</td></tr>
+    ${row('Water holding', Y.soil.awhc, R.soil.awhc, 0, ' mm')}
+    ${row('Clay / sand', null, null)}`.replace(
+      '<tr><th>Clay / sand</th><td>–</td><td>–</td></tr>',
+      `<tr><th>Clay / sand</th><td>${fmt(Y.soil.clay, 0)} / ${fmt(Y.soil.sand, 0)}%</td><td>${fmt(R.soil.clay, 0)} / ${fmt(R.soil.sand, 0)}%</td></tr>`)
+      + row('pH', Y.soil.ph, R.soil.ph, 1) : ''}
+    </tbody></table>`;
+
+  // 2. what happened next there
+  const next = [];
+  for (let k = 1; k <= 6; k++) {
+    const t = rp.t + k;
+    if (t >= state.n) break;
+    next.push({ t, ta: climateValue('T2M', rowT, t, 'anom'), p: climate('PRECIP', rowT, t),
+      pa: climateValue('PRECIP', rowT, t, 'anom'), w: climateValue('GWETROOT', rowT, t, 'anom') });
+  }
+  if (next.length) {
+    h += `<h4>What happened next there ${infoHtml('The six months after the matched month in that district, against its own 1991–2020 normal. Wetness is root-zone soil wetness (0–1).')}</h4>
+      <table class="rep-table next"><thead><tr><th></th><th>Temp vs normal</th><th>Precip</th><th>Soil wetness</th></tr></thead><tbody>` +
+      next.map((r) => `<tr><th>${tLabel(r.t)}</th><td class="${cls(r.ta, 0.5)}">${r.ta == null ? '–' : signed(r.ta) + ' °C'}</td>` +
+        `<td class="${cls(r.pa, 5)}">${fmt(r.p, 0)} mm <span class="muted">(${signed(r.pa, 0)})</span></td>` +
+        `<td class="${cls(r.w, 0.02)}">${r.w == null ? '–' : signed(r.w, 2)}</td></tr>`).join('') +
+      '</tbody></table>';
+  }
+
+  // 3. their growing season that year
+  h += `<h4>Their ${gy} growing season ${infoHtml('The growing season that follows the matched month (autumn months lead into the next year). Yields are AAFC modelled estimates per ecodistrict; payments and irrigation are for the whole province.')}</h4>`;
+  const facts = [];
+  const cys = state.eco.crop_years;
+  if (cys?.length && R.crops) {
+    const cy = clampYear(gy, cys), c = cropRec(them, cy);
+    if (c) {
+      const groups = c.groups.filter(([, v]) => v >= 5).slice(0, 3)
+        .map(([g, v]) => `${esc(CROP_GROUPS[g][0].toLowerCase())} ${fmt(v, 0)}%`).join(', ');
+      facts.push(`<li><b>Crops${cy === gy ? '' : ` (${cy}, nearest inventory year)`}:</b> ${fmt(c.crop, 0)}% of land cropped, ${fmt(c.pasture, 0)}% pasture` +
+        (c.crop > 0 ? `; mostly ${esc(state.classes[c.top]?.[0] ?? '–')}${groups ? ` (${groups} of crops)` : ''}` : '') + '.</li>');
+    }
+  }
+  const yl = yieldRows(them, gy);
+  if (yl.rows.length) {
+    facts.push(`<li><b>Yields ${yl.year}${yl.year === gy ? '' : ' (nearest year with data)'}</b> vs this district's own average:` +
+      `<div class="rep-yields">${yl.rows.map((r) => `<span class="${cls(r.pct, 5)}">${esc(r.label)} <b>${pctTxt(r.pct)}</b></span>`).join('')}</div>` +
+      (yl.year === 2024 ? '<div class="muted small">2024 yields in the source data repeat 2021; treat with care.</div>' : '') + '</li>');
+  }
+  const f = state.finance, prov = R.prov;
+  if (f && prov && gy >= f.y0 && gy <= f.y1) {
+    const parts = ['cropins_net', 'total_net'].filter((k) => f.metrics[k]).map((k) => {
+      const v = financeValue(them, gy, k), mean = financeMean(k)[prov];
+      const pct = v != null && mean ? (v - mean) / Math.abs(mean) * 100 : null;
+      return `${esc(f.metrics[k].label.toLowerCase())} ${moneyFmt(v)} <span class="${cls(pct, 10)}">(${pctTxt(pct)} vs usual)</span>`;
+    });
+    facts.push(`<li><b>${esc(f.provinces[prov] || prov)} farm payments ${gy}:</b> ${parts.join('; ')}.</li>`);
+  }
+  const irr = state.irrigation;
+  if (irr && prov) {
+    const yi = irr.years.findIndex((yy) => Math.abs(yy - gy) <= 1);
+    if (yi >= 0) {
+      const v = irrigationValue('prov', 'total', prov, yi, 'value'), pct = irrigationValue('prov', 'total', prov, yi, 'anom');
+      if (v != null) facts.push(`<li><b>Irrigation, ${esc(prov)} ${irr.years[yi]}:</b> ${volFmt(v)} <span class="${cls(pct, 10)}">(${pctTxt(pct)} vs usual)</span>.</li>`);
+    }
+  }
+  h += facts.length ? `<ul class="rep-facts">${facts.join('')}</ul>` : '<p class="small">No farm data for that season yet.</p>';
+
+  // 4. the place in general
+  const nT = normals('T2M'), nP = normals('PRECIP');
+  const annP = (r) => { let s = 0; for (let m = 0; m < 12; m++) s += nP[r * 12 + m]; return s; };
+  const summerT = (r) => (nT[r * 12 + 4] + nT[r * 12 + 5] + nT[r * 12 + 6] + nT[r * 12 + 7]) / 4;
+  const usual = (id) => {
+    const d = state.eco.d[id];
+    if (!d?.crops) return null;
+    let crop = 0, n = 0;
+    const tops = {};
+    for (const y of state.eco.crop_years) {
+      const c = cropRec(id, y);
+      if (!c) continue;
+      crop += c.crop; n++;
+      if (c.crop > 0) tops[c.groups[0][0]] = (tops[c.groups[0][0]] || 0) + 1;
+    }
+    const top = Object.entries(tops).sort((a, b) => b[1] - a[1])[0]?.[0];
+    return n ? { crop: crop / n, top } : null;
+  };
+  const uY = usual(me), uT = usual(them);
+  const g = (u) => (u ? `${fmt(u.crop, 0)}% cropped${u.top ? `, mostly ${esc(CROP_GROUPS[u.top][0].toLowerCase())}` : ''}` : '–');
+  h += `<h4>The place in general ${infoHtml(`Long-term picture: climate normals for ${NORMAL[0]}–${NORMAL[1]}, crops averaged over the crop inventory years.`)}</h4>
+    <table class="rep-table"><thead><tr><th></th><th>You</th><th>Them</th></tr></thead><tbody>
+    ${row('Yearly precipitation', annP(rowY), annP(rowT), 0, ' mm')}
+    ${row('Summer temp (May–Aug)', summerT(rowY), summerT(rowT), 1, ' °C')}
+    <tr><th>Usual farming</th><td>${g(uY)}</td><td>${g(uT)}</td></tr>
+    <tr><th>Province</th><td>${esc(Y.prov ?? '–')}</td><td>${esc(R.prov ?? '–')}</td></tr>
+    </tbody></table>
+    <p class="rep-foot">Estimates for planning and research, not advice. Sources: NASA POWER, AAFC (soil, crop inventory, yields), Statistics Canada, Meteomatics/ECMWF. Link to this view: <span class="rep-link">${esc(location.href)}</span></p>
+  </div>`;
+  return h;
+}
+
+// yields of the crops that matter in a district for a season: those actually seeded there, biggest first
+function yieldRows(id, gy) {
+  const yd = state.yield;
+  if (!yd?.d[id]) return { rows: [], year: gy };
+  const year = Math.max(yd.y0, Math.min(yd.y1, gy));
+  const sy = state.seeded ? Math.max(state.seeded.y0, Math.min(state.seeded.y1, year)) : null;
+  const rows = [];
+  for (const [code, label] of yd.crops) {
+    const v = yieldValue(id, year, code, 'value');
+    if (v == null) continue;
+    const fr = grownFrac(id, year, code);
+    if (fr != null && fr < 0.05) continue; // barely grown: modelled noise
+    const area = state.seeded && code in state.seededIdx ? seededValue(id, sy, code) : null;
+    rows.push({ label, v, pct: yieldValue(id, year, code, 'anom'), area: area ?? -1 });
+  }
+  rows.sort((a, b) => b.area - a.area);
+  return { rows: rows.slice(0, 6), year };
+}
+
+function leadSentence(rp, gy) {
+  const rowT = state.rowOf[rp.id];
+  let ta = 0, nt = 0, p = 0, pn = 0;
+  const nP = normals('PRECIP');
+  for (let k = 1; k <= 6 && rp.t + k < state.n; k++) {
+    const a = climateValue('T2M', rowT, rp.t + k, 'anom'), v = climate('PRECIP', rowT, rp.t + k);
+    if (a != null) { ta += a; nt++; }
+    if (v != null) { p += v; pn += nP[rowT * 12 + ((rp.t + k) % 12)]; }
+  }
+  const w = [];
+  if (nt) w.push(Math.abs(ta / nt) < 0.5 ? 'near-normal temperatures' : `${fmt(Math.abs(ta / nt))} °C ${ta > 0 ? 'warmer' : 'colder'} than normal`);
+  if (pn) {
+    const pp = (p / pn - 1) * 100;
+    w.push(Math.abs(pp) < 10 ? 'about normal precipitation' : `${pp > 0 ? 'wetter' : 'drier'} than normal (${pctTxt(pp)} precipitation)`);
+  }
+  let out = w.length ? `The six months after ${tLabel(rp.t)} there were ${w.join(' and ')}.` : '';
+  const yl = yieldRows(rp.id, gy);
+  const main = yl.rows[0];
+  if (main && main.pct != null) {
+    out += ` Their ${yl.year} ${main.label.toLowerCase()} yield was ${Math.abs(main.pct) < 3 ? 'about average' : `${pctTxt(main.pct)} vs their own average`}.`;
+  }
+  return out.trim();
+}
 // ---------------------------------------------------------------------------
 // Info icons: hover, focus or tap shows the hidden text in one floating popover
 // ---------------------------------------------------------------------------
@@ -1607,8 +1846,14 @@ function buildUI() {
 
   const results = $('#sim-results');
   results.addEventListener('click', (e) => {
+    if (e.target.closest('.rep-back')) return closeReport();
+    if (e.target.closest('.rep-print')) return window.print();
+    if (e.target.closest('.rep-jump') && state.report) return setMonth(state.report.t);
     const li = e.target.closest('li[data-id]');
-    if (li) map.flyTo({ center: state.eco.d[li.dataset.id].lp, zoom: Math.max(map.getZoom(), 5.5) });
+    if (li) {
+      const m = state.matches.find((x) => x.id === Number(li.dataset.id) && x.t === Number(li.dataset.t));
+      if (m) openReport(m);
+    }
   });
   results.addEventListener('dblclick', (e) => {
     const li = e.target.closest('li[data-id]');

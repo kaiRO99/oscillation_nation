@@ -277,7 +277,7 @@ function drawOni() {
 
 // ---- time controls: steppers, pickers, keyboard, and two "tapes" (10 years and 3 years) that always keep
 // the selected month in the middle. Drag a tape like film to scroll through time, click to jump.
-const TAPES = [{ id: 'tape-mid', months: 120 }, { id: 'tape-fine', months: 36 }];
+const TAPES = [{ id: 'tape-fine', months: 36 }];
 
 function syncTimeControls() {
   $('#pick-month').value = state.t % 12;
@@ -427,17 +427,21 @@ function setMonth(t) {
   const slider = $('#month');
   slider.value = state.t;
   syncTimeControls();
-  $('#month-label').innerHTML = esc(tLabel(state.t)) + (isFuture(state.t) ? ' <span class="fc-tag">forecast</span>' : '');
+  // fixed-size labels so nothing below moves when crossing into the forecast
+  $('#month-label').textContent = tLabel(state.t);
   const ph = state.enso[state.t], v = state.oni[state.t], fc = state.oniFc[state.t];
   const badge = $('#enso-badge');
   badge.textContent = ph ? `${ENSO[ph].label} · ONI ${signed(v, 2)}` : 'ONI n/a';
   badge.className = 'badge ' + (ph || '') + (fc ? ' fc' : '');
   badge.title = fc ? 'Forecast ONI' : 'Observed ONI';
-  $('#oni-text').innerHTML = (fc
-    ? `<b>Forecast</b> ONI for the ${ONI_SEASONS[state.t % 12]} season centred on ${tLabel(state.t)}, from the ECMWF seasonal ` +
-      'forecast of Niño 3.4 sea temperature (via Meteomatics), anchored to NOAA\'s latest observation. '
-    : `ONI for the ${ONI_SEASONS[state.t % 12]} season centred on ${tLabel(state.t)}. `) +
-    'Coloured as an El Niño / La Niña episode when it stays beyond ±0.5 °C for 5+ overlapping seasons; the shaded end is forecast. Drag the big chart for any year, the 10-year and 3-year strips below for nearby years and single months, or use the arrow keys.';
+  $('#month-src').innerHTML = isFuture(state.t)
+    ? '<span class="fc-tag">forecast</span>ECMWF seasonal forecast via Meteomatics'
+    : isExt(state.t)
+      ? `Recent month · ERA5 via Meteomatics${fc ? ' · ONI forecast' : ''}`
+      : `Observed · NASA POWER${fc ? ' · ONI forecast' : ''}`;
+  $('#oni-text').innerHTML = `ONI for the ${ONI_SEASONS[state.t % 12]} season centred on ${tLabel(state.t)}. ` +
+    'Coloured as an El Niño / La Niña episode when it stays beyond ±0.5 °C for 5+ overlapping seasons; the shaded end is ' +
+    'forecast (ECMWF Niño 3.4 sea temperature via Meteomatics). Drag the chart for any year, the 3-year strip for single months, or use the arrow keys.';
   const sel = $('#oni-sel');
   if (sel) {
     const x = (state.t + 0.5) * 300 / state.n;
@@ -557,16 +561,14 @@ function paintClimate() {
   const colors = rampFor(key, mode);
   const v = state.meta.vars[key];
   $('#climate-ramp').innerHTML = rampHtml(colors, dom, mode === 'anom' ? `${v.units} vs normal` : v.units, Math.max(0, varDigits(key) - (mode === 'anom' ? 0 : 1)));
-  const note = $('#climate-note');
+  const note = $('#climate-note'); // always shown, fixed height, so the panel never jumps
   if (isExt(state.t)) {
-    note.hidden = false;
     note.innerHTML = !v.forecast
-      ? `<b>No forecast for ${esc(v.label.toLowerCase())}.</b> Meteomatics' seasonal forecast does not include it; ` +
-        `NASA POWER has it up to ${tLabel(state.nObs - 1)}.`
+      ? `<b>No forecast for this variable.</b> NASA POWER has it up to ${tLabel(state.nObs - 1)}.`
       : isFuture(state.t)
         ? '<b>Forecast:</b> ECMWF seasonal forecast via Meteomatics, bias-corrected to NASA POWER for each ecodistrict.'
         : '<b>Recent month</b> not yet in NASA POWER: Meteomatics analysis, bias-corrected to NASA POWER.';
-  } else note.hidden = true;
+  } else note.innerHTML = '<b>Observed:</b> NASA POWER monthly data, averaged over each ecodistrict.';
   if (!mapReady()) return;
   map.setPaintProperty('climate-fill', 'fill-color', rampExpr('v', colors, dom));
   state.ids.forEach((id, r) => map.setFeatureState({ source: 'ed', id }, { v: climateValue(key, r, state.t) }));

@@ -6,7 +6,7 @@
 <title>Oscillation Nation · El Niño and Canadian farmland</title>
 <link href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css" rel="stylesheet">
 <!-- Porkbun caches .css/.js for 30 days: bump ?v= on every deploy that changes them -->
-<link href="style.css?v=18" rel="stylesheet">
+<link href="style.css?v=20" rel="stylesheet">
 </head>
 <body>
 <div id="map"></div>
@@ -23,6 +23,7 @@
         <output id="month-label">–</output>
         <span id="enso-badge" class="badge"></span>
       </div>
+      <div id="month-src" class="month-src"></div>
       <svg id="oni-chart" viewBox="0 0 300 70" preserveAspectRatio="none" role="img" aria-label="Oceanic Niño Index by month"></svg>
       <div id="enso-strip" aria-hidden="true"></div>
       <input id="month" type="range" min="0" max="0" step="1" value="0" aria-label="Month">
@@ -39,9 +40,7 @@
       </div>
 
       <div class="tapes">
-        <div class="tape-head"><span>10 years</span><span class="muted">drag to scroll · click to jump</span></div>
-        <svg id="tape-mid" class="tape" viewBox="0 0 360 46" aria-label="Timeline, 10 years around the selected month"></svg>
-        <div class="tape-head"><span>3 years</span><span class="muted">for single months</span></div>
+        <div class="tape-head"><span>3 years around the selected month</span><span class="muted">drag · click · scroll</span></div>
         <svg id="tape-fine" class="tape" viewBox="0 0 360 46" aria-label="Timeline, 3 years around the selected month"></svg>
       </div>
       <div class="legend-row">
@@ -62,7 +61,7 @@
             <option value="anom">Difference from 1991–2020 normal</option>
           </select>
           <div class="ramp" id="climate-ramp"></div>
-          <p class="small note" id="climate-note" hidden></p>
+          <p class="small note" id="climate-note"></p>
         </div>
       </div>
 
@@ -138,6 +137,6 @@
 <div id="tip" hidden></div>
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-<script src="app.js?v=18"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>

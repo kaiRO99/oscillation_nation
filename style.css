@@ -44,7 +44,11 @@ select, input[type=text], input:not([type]) {
 }
 
 /* ---------- timeline ---------- */
-.time-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-bottom: 6px; }
+.time-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; margin-bottom: 2px; }
+.time-row .badge { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#month-label { min-width: 4.6em; }
+.month-src { height: 18px; line-height: 18px; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+.month-src .fc-tag { vertical-align: 1px; margin-right: 4px; }
 #play { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--accent); color: #fff; font-size: 13px; flex: none; }
 #play.on { background: #1d2420; }
 #month-label { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; white-space: nowrap; }
@@ -117,7 +121,7 @@ input[type=checkbox] { accent-color: var(--accent); margin: 0; }
 .fc-tag { display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
   padding: 1px 5px; border-radius: 3px; background: #333; color: #fff; vertical-align: 2px; }
 .badge.fc { background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.18) 0 4px, transparent 4px 8px); }
-.note { margin: 6px 0 0; padding: 6px 8px; background: #f3f1ea; border-radius: 4px; }
+.note { margin: 6px 0 0; padding: 6px 8px; background: #f3f1ea; border-radius: 4px; min-height: calc(3 * 1.4em + 12px); line-height: 1.4; box-sizing: border-box; }
 
 /* precise time controls */
 .hover-label { color: var(--ink, #1d2420); font-weight: 600; }

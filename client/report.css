@@ -1,17 +1,22 @@
 /* Comparison report: screen styles, then print styles (Download PDF = print -> Save as PDF). */
+/* palette mirrors style.css (the app's dark-teal panels) */
 :root {
-  --ink: #1d2420;
-  --muted: #5e6a63;
-  --line: #e2e0d8;
-  --soft: #f3f2ed;
+  --ink: oklch(0.9434 0.0041 219.99);
+  --muted: oklch(0.8123 0.0041 219.99);
+  --line: oklch(0.4165 0.0651 219.99);
+  --soft: oklch(0.4165 0.0651 219.99);   /* app's .you / hovered match */
+  --dark: oklch(0.3052 0.0651 219.99);   /* app's panel background */
   --accent: #2f6b4f;
+  --accent-ink: #8fd0aa;  /* lighter green for text on the dark panel */
   --nino: #d0453a;
   --neutral: #4c9a5b;
   --nina: #2f6db5;
   --a: #2f6b4f;      /* your district */
+  --a-ink: #8fd0aa;
   --b: #ff8a00;      /* the similar region (the map's match colour) */
-  --b-ink: #b45f00;  /* darker orange for text on white */
-  --page: #fbfaf7;
+  --b-ink: #ff8a00;
+  --page: #f4f2ec;   /* app's body background */
+  --shadow: 0 4px 18px rgba(0, 0, 0, .15);
 }
 
 * { box-sizing: border-box; }
@@ -32,10 +37,10 @@ body {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 16px;
-  background: #fff;
+  background: var(--dark);
   border-bottom: 1px solid var(--line);
 }
-.brand { color: var(--accent); font-weight: 700; text-decoration: none; }
+.brand { color: var(--accent-ink); font-weight: 700; text-decoration: none; }
 .toolbar button {
   padding: 7px 14px;
   border: 0;
@@ -52,16 +57,16 @@ main {
   max-width: 860px;
   margin: 24px auto 48px;
   padding: 32px 40px;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  background: var(--dark);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
 }
 
 .report-head { border-bottom: 2px solid var(--accent); padding-bottom: 12px; }
-.eyebrow { margin: 0; color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.eyebrow { margin: 0; color: var(--accent-ink); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 h1 { margin: 4px 0; font-size: 26px; line-height: 1.25; }
 h1 .vs { color: var(--muted); font-weight: 400; font-size: .75em; }
-.a-ink { color: var(--a); }
+.a-ink { color: var(--a-ink); }
 .b-ink { color: var(--b-ink); }
 h2 { margin: 0 0 8px; font-size: 18px; }
 .meta, .muted { color: var(--muted); }
@@ -80,7 +85,7 @@ section p { margin: 0 0 10px; }
 .summary .label { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .summary .name { font-weight: 700; font-size: 16px; margin: 2px 0 4px !important; }
 .score { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 110px; text-align: center; }
-.score b { font-size: 40px; line-height: 1; color: var(--accent); }
+.score b { font-size: 40px; line-height: 1; color: var(--accent-ink); }
 .score span { font-size: 12px; }
 .lede { margin: 8px 0 0; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
 
@@ -99,7 +104,7 @@ tbody th { font-weight: 400; }
 .compare thead th.side.a { border-color: var(--a); }
 .compare thead th.side.b { border-color: var(--b); }
 .compare .sub { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
-a { color: var(--accent); }
+a { color: var(--accent-ink); }
 
 .placeholder { color: var(--muted); }
 .placeholder h2 { color: var(--ink); }
@@ -128,10 +133,20 @@ a { color: var(--accent); }
 }
 
 @media print {
+  /* paper stays light: swap back to dark-on-white so the PDF doesn't flood the page with teal */
+  :root {
+    --ink: #1d2420;
+    --muted: #5e6a63;
+    --line: #e2e0d8;
+    --soft: #f3f2ed;
+    --accent-ink: #2f6b4f;
+    --a-ink: #2f6b4f;
+    --b-ink: #b45f00;
+  }
   .no-print { display: none !important; }
 
   body { background: #fff; font-size: 10pt; }
-  main { max-width: none; margin: 0; padding: 0; border: 0; border-radius: 0; }
+  main { max-width: none; margin: 0; padding: 0; border: 0; border-radius: 0; background: #fff; box-shadow: none; }
 
   h1 { font-size: 18pt; }
   h2 { font-size: 12.5pt; break-after: avoid; }

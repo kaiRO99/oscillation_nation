@@ -75,7 +75,7 @@ const state = {
 // ---------------------------------------------------------------------------
 const map = new maplibregl.Map({
   container: 'map',
-  style: 'https://tiles.openfreemap.org/styles/positron',
+  style: 'https://tiles.openfreemap.org/styles/fiord',
   center: [-98, 53],
   zoom: 3.4,
   maxZoom: 12,

@@ -1,11 +1,13 @@
 """Monthly NASA POWER climate for every ecodistrict.
 
-Usage:  python scripts/fetch_power.py [--start 1981] [--end 2025] [--workers 4]
+Usage:  python scripts/fetch_power.py [--start 1981] [--end 2026] [--split 2025] [--workers 4]
 Reads   data/raw/ecodistrict_points.json   (from build_ecodistricts.py)
 Writes  data/climate/<VAR>.bin             Int16 little-endian, [ecodistrict][month], value = int * scale,
                                            -32768 = missing; ecodistricts in data/ecodistricts.json order
         data/climate/meta.json             variables, units, scales, months, ecodistrict id order
-Caches  data/raw/power/                    one JSON response per sample point (reruns resume from it)
+Caches  data/raw/power/                    one JSON response per sample point and year range (reruns resume from
+                                           it); years up to --split are one request, later years another, so a new
+                                           year only re-downloads that year
 
 Each ecodistrict is the cos(latitude)-weighted mean of its sample points (~0.5 deg MERRA-2 grid).
 No login required. Uses numpy.
@@ -50,7 +52,17 @@ VARS = {
 }
 
 
-def fetch_point(lon, lat, start, end):
+def fetch_point(lon, lat, ranges):
+    """Merge the responses for several year ranges into one {fill, parameter} dict."""
+    parts = [fetch_range(lon, lat, s, e) for s, e in ranges]
+    out = {"fill": parts[0]["fill"], "parameter": {}}
+    for part in parts:
+        for k, series in part["parameter"].items():
+            out["parameter"].setdefault(k, {}).update(series)
+    return out
+
+
+def fetch_range(lon, lat, start, end):
     path = CACHE / f"{lat:.3f}_{lon:.3f}_{start}_{end}.json"
     if path.exists():
         return json.loads(path.read_text())
@@ -99,7 +111,8 @@ def to_array(raw, months):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", type=int, default=1981)
-    ap.add_argument("--end", type=int, default=2025)
+    ap.add_argument("--end", type=int, default=2026)
+    ap.add_argument("--split", type=int, default=2025, help="last year of the first (cached) request")
     ap.add_argument("--workers", type=int, default=4)
     a = ap.parse_args()
 
@@ -109,11 +122,12 @@ def main():
     months = [(y, m) for y in range(a.start, a.end + 1) for m in range(1, 13)]
     print(f"{len(ids)} ecodistricts, {len(unique)} sample points, {len(months)} months")
 
+    ranges = [(a.start, min(a.end, a.split))] + ([(a.split + 1, a.end)] if a.end > a.split else [])
     CACHE.mkdir(parents=True, exist_ok=True)
     data = {}
     t0 = time.time()
     with ThreadPoolExecutor(a.workers) as ex:
-        for i, (p, raw) in enumerate(zip(unique, ex.map(lambda p: fetch_point(*p, a.start, a.end), unique)), 1):
+        for i, (p, raw) in enumerate(zip(unique, ex.map(lambda p: fetch_point(*p, ranges), unique)), 1):
             data[p] = to_array(raw, months)
             if i % 100 == 0 or i == len(unique):
                 print(f"  {i}/{len(unique)} points ({time.time() - t0:.0f} s)", flush=True)
@@ -126,6 +140,9 @@ def main():
         with np.errstate(invalid="ignore"):
             cube[:, k, :] = np.nansum(stack * w, axis=0) / w.sum(axis=0)
 
+    # last month where most ecodistricts have a temperature (POWER lags real time by a month or two)
+    have = np.mean(~np.isnan(cube[0]), axis=0) > 0.5
+    last = int(np.nonzero(have)[0].max())
     OUT.mkdir(parents=True, exist_ok=True)
     meta_vars = {}
     for i, (key, (param, label, units, scale, _)) in enumerate(VARS.items()):
@@ -136,6 +153,7 @@ def main():
     (OUT / "meta.json").write_text(json.dumps({
         "source": "NASA POWER monthly point API (MERRA-2 / CERES), " + POWER,
         "start": f"{a.start}-01", "months": len(months), "ids": [int(i) for i in ids],
+        "power_last": f"{months[last][0]}-{months[last][1]:02d}",
         "vars": meta_vars,
         "layout": "Int16 little-endian, row-major [ecodistrict][month]; value = int * scale; -32768 = missing",
     }, ensure_ascii=False, indent=1), encoding="utf-8")

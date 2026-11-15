@@ -463,7 +463,8 @@
   1019
  ],
  "start": "1981-01",
- "months": 540,
+ "months": 557,
+ "observed_months": 549,
  "k": 10,
  "weights": {
   "T2M": 0.5,
@@ -488,5 +489,5 @@
   "soil.ph": 0.5
  },
  "layout": "per file: [month][k] x 4 bytes = uint16 LE pool index, uint8 year offset from start, uint8 score",
- "method": "same calendar month, different year, other ecodistricts; weighted z-score distance; score = 100*exp(-2*d2/sum(w))"
+ "method": "same calendar month, different (observed) year, other ecodistricts; weighted z-score distance over the variables both months have; score = 100*exp(-2*d2/sum(w))"
 }

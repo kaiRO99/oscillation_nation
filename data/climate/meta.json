@@ -1,7 +1,7 @@
 {
  "source": "NASA POWER monthly point API (MERRA-2 / CERES), https://power.larc.nasa.gov/api/temporal/monthly/point",
  "start": "1981-01",
- "months": 540,
+ "months": 557,
  "ids": [
   1,
   2,
@@ -1025,97 +1025,140 @@
   1030,
   1031
  ],
+ "power_last": "2026-09",
  "vars": {
   "T2M": {
    "label": "Mean temperature",
    "units": "°C",
    "scale": 0.1,
-   "power": "T2M"
+   "power": "T2M",
+   "forecast": true
   },
   "T2M_MAX": {
    "label": "Max temperature",
    "units": "°C",
    "scale": 0.1,
-   "power": "T2M_MAX"
+   "power": "T2M_MAX",
+   "forecast": true
   },
   "T2M_MIN": {
    "label": "Min temperature",
    "units": "°C",
    "scale": 0.1,
-   "power": "T2M_MIN"
+   "power": "T2M_MIN",
+   "forecast": true
   },
   "T2MDEW": {
    "label": "Dew point",
    "units": "°C",
    "scale": 0.1,
-   "power": "T2MDEW"
+   "power": "T2MDEW",
+   "forecast": true
   },
   "PRECIP": {
    "label": "Precipitation",
    "units": "mm",
    "scale": 0.1,
-   "power": "PRECTOTCORR"
+   "power": "PRECTOTCORR",
+   "forecast": true
   },
   "SNOWFALL": {
    "label": "Snowfall (water equiv.)",
    "units": "mm",
    "scale": 0.1,
-   "power": "PRECSNOLAND"
+   "power": "PRECSNOLAND",
+   "forecast": false
   },
   "SNODP": {
    "label": "Snow depth",
    "units": "cm",
    "scale": 0.1,
-   "power": "SNODP"
+   "power": "SNODP",
+   "forecast": true
   },
   "RH2M": {
    "label": "Relative humidity",
    "units": "%",
    "scale": 0.1,
-   "power": "RH2M"
+   "power": "RH2M",
+   "forecast": true
   },
   "SOLAR": {
    "label": "Solar radiation",
    "units": "MJ/m²/day",
    "scale": 0.01,
-   "power": "ALLSKY_SFC_SW_DWN"
+   "power": "ALLSKY_SFC_SW_DWN",
+   "forecast": true
   },
   "WS2M": {
    "label": "Wind speed",
    "units": "m/s",
    "scale": 0.01,
-   "power": "WS2M"
+   "power": "WS2M",
+   "forecast": true
   },
   "ET": {
    "label": "Evapotranspiration",
    "units": "mm",
    "scale": 0.1,
-   "power": "EVPTRNS"
+   "power": "EVPTRNS",
+   "forecast": false
   },
   "GWETTOP": {
    "label": "Surface soil wetness",
    "units": "0–1",
    "scale": 0.001,
-   "power": "GWETTOP"
+   "power": "GWETTOP",
+   "forecast": false
   },
   "GWETROOT": {
    "label": "Root-zone soil wetness",
    "units": "0–1",
    "scale": 0.001,
-   "power": "GWETROOT"
+   "power": "GWETROOT",
+   "forecast": false
   },
   "GWETPROF": {
    "label": "Profile soil wetness",
    "units": "0–1",
    "scale": 0.001,
-   "power": "GWETPROF"
+   "power": "GWETPROF",
+   "forecast": false
   },
   "FROST_DAYS": {
    "label": "Frost days",
    "units": "days",
    "scale": 0.1,
-   "power": "FROST_DAYS"
+   "power": "FROST_DAYS",
+   "forecast": true
   }
  },
- "layout": "Int16 little-endian, row-major [ecodistrict][month]; value = int * scale; -32768 = missing"
+ "layout": "Int16 little-endian, row-major [ecodistrict][month]; value = int * scale; -32768 = missing",
+ "extension": {
+  "source": "Meteomatics API (https://api.meteomatics.com): 'ecmwf-era5' for recent months, 'ecmwf-mmsf' (ECMWF seasonal forecast) for future months; bias-corrected to POWER per ecodistrict",
+  "issued": "2026-11-14",
+  "first": "2026-10",
+  "kinds": [
+   "analysis",
+   "forecast",
+   "forecast",
+   "forecast",
+   "forecast",
+   "forecast",
+   "forecast",
+   "forecast"
+  ],
+  "vars": [
+   "T2M",
+   "T2M_MAX",
+   "T2M_MIN",
+   "T2MDEW",
+   "PRECIP",
+   "RH2M",
+   "WS2M",
+   "SOLAR",
+   "SNODP",
+   "FROST_DAYS"
+  ]
+ }
 }

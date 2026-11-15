@@ -51,7 +51,8 @@ const state = {
   t: 0, y0: 1981, n: 0,
   climateVar: 'T2M', climateMode: 'value', soilVar: 'awhc',
   meta: null, eco: null, ids: [], rowOf: {}, bins: {}, normals: {}, domains: {},
-  oni: [], enso: [], classes: {},
+  oni: [], enso: [], oniFc: [], classes: {},
+  nObs: 0, nowT: null, kinds: [], // months < nObs are NASA POWER; later ones come from Meteomatics
   simMeta: null, simCache: {}, sel: null, matches: [], hover: null,
 };
 
@@ -66,7 +67,7 @@ const map = new maplibregl.Map({
   maxZoom: 12,
   attributionControl: {
     compact: true,
-    customAttribution: 'Ecodistricts, soil & crops © AAFC (OGL-Canada) · Climate: NASA POWER · ONI © NOAA CPC',
+    customAttribution: 'Ecodistricts, soil & crops © AAFC (OGL-Canada) · Climate: NASA POWER, Meteomatics · ONI © NOAA CPC',
   },
 });
 map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
@@ -83,9 +84,12 @@ const dataReady = Promise.all([
   getJSON('data/climate/meta.json'),
   getJSON('data/aci_classes.json'),
   getJSON('data/similarity/meta.json').catch(() => null),
+  getJSON('data/oni_forecast.json').catch(() => null),
 ]);
 
-const uiReady = dataReady.then(async ([oni, eco, meta, aci, simMeta]) => {
+const monthIndex = (ym, y0) => (Number(ym.slice(0, 4)) - y0) * 12 + Number(ym.slice(5, 7)) - 1;
+
+const uiReady = dataReady.then(async ([oni, eco, meta, aci, simMeta, oniFc]) => {
   state.eco = eco;
   state.meta = meta;
   state.simMeta = simMeta;
@@ -94,11 +98,18 @@ const uiReady = dataReady.then(async ([oni, eco, meta, aci, simMeta]) => {
   meta.ids.forEach((id, i) => { state.rowOf[id] = i; });
   state.y0 = Number(meta.start.slice(0, 4));
   state.n = meta.months;
-  buildEnso(oni.data);
+  state.nObs = meta.power_last ? monthIndex(meta.power_last, state.y0) + 1 : state.n;
+  const ext = meta.extension;
+  state.kinds = new Array(state.n).fill('observed');
+  if (ext) {
+    ext.kinds.forEach((k, i) => { state.kinds[state.nObs + i] = k; });
+    state.nowT = clampT(monthIndex(ext.issued, state.y0));
+  }
+  buildEnso(oni.data.concat((oniFc?.data || []).map((r) => ({ ...r, forecast: true }))));
 
   const q = new URLSearchParams(location.search);
   const qm = /^(\d{4})-(\d{2})$/.exec(q.get('m') || '');
-  state.t = qm ? clampT((Number(qm[1]) - state.y0) * 12 + Number(qm[2]) - 1) : clampT(state.n - 6); // default: last July
+  state.t = qm ? clampT((Number(qm[1]) - state.y0) * 12 + Number(qm[2]) - 1) : clampT(state.nowT ?? state.n - 6); // default: this month
   if (meta.vars[q.get('v')]) state.climateVar = q.get('v');
 
   buildUI();
@@ -185,11 +196,13 @@ map.on('load', async () => {
 const clampT = (t) => Math.max(0, Math.min(state.n - 1, t));
 const tYear = (t) => state.y0 + Math.floor(t / 12);
 const tLabel = (t) => `${MONTHS[t % 12]} ${tYear(t)}`;
+const isFuture = (t) => state.kinds[t] === 'forecast';
+const isExt = (t) => t >= state.nObs; // not in NASA POWER yet (Meteomatics)
 
 // ONI is a 3-month running mean; put each season on its centre month (DJF -> Jan).
 // An El Niño / La Niña episode needs the threshold met for at least 5 overlapping seasons in a row.
 function buildEnso(rows) {
-  const series = rows.map((r) => ({ k: (r.year - state.y0) * 12 + ONI_SEASONS.indexOf(r.season), v: r.anom }))
+  const series = rows.map((r) => ({ k: (r.year - state.y0) * 12 + ONI_SEASONS.indexOf(r.season), v: r.anom, fc: !!r.forecast }))
     .sort((a, b) => a.k - b.k);
   const cls = series.map(() => 'neutral');
   for (const [sign, name] of [[1, 'nino'], [-1, 'nina']]) {
@@ -205,8 +218,9 @@ function buildEnso(rows) {
   }
   state.oni = new Array(state.n).fill(null);
   state.enso = new Array(state.n).fill(null);
+  state.oniFc = new Array(state.n).fill(false);
   series.forEach((s, i) => {
-    if (s.k >= 0 && s.k < state.n) { state.oni[s.k] = s.v; state.enso[s.k] = cls[i]; }
+    if (s.k >= 0 && s.k < state.n) { state.oni[s.k] = s.v; state.enso[s.k] = cls[i]; state.oniFc[s.k] = s.fc; }
   });
 }
 
@@ -222,8 +236,17 @@ function drawOni() {
     if (v == null) return;
     const h = v * sc;
     s += `<rect x="${(t * bw).toFixed(2)}" width="${(bw + 0.08).toFixed(2)}" y="${(h >= 0 ? mid - h : mid).toFixed(2)}" ` +
-      `height="${Math.max(0.4, Math.abs(h)).toFixed(2)}" fill="${ENSO[state.enso[t]].color}"/>`;
+      `height="${Math.max(0.4, Math.abs(h)).toFixed(2)}" fill="${ENSO[state.enso[t]].color}"${state.oniFc[t] ? ' fill-opacity="0.45"' : ''}/>`;
   });
+  // forecast zone: from the first forecast ONI season or climate month on
+  const f0 = Math.min(...[state.oniFc.indexOf(true), state.kinds.indexOf('forecast')].filter((i) => i >= 0));
+  state.fcX = null;
+  if (Number.isFinite(f0)) {
+    const x0 = f0 * bw;
+    s = `<rect x="${x0.toFixed(2)}" width="${(W - x0).toFixed(2)}" y="0" height="${H}" class="fc-zone"/>` + s +
+      `<line x1="${x0.toFixed(2)}" x2="${x0.toFixed(2)}" y1="0" y2="${H}" class="fc-line"/>`;
+    state.fcX = x0 / W * 100;
+  }
   s += `<line x1="0" x2="${W}" y1="${mid}" y2="${mid}" class="zero"/><line id="oni-sel" y1="0" y2="${H}" class="sel"/>`;
   svg.innerHTML = s;
 
@@ -237,20 +260,25 @@ function drawOni() {
       start = t;
     }
   }
-  $('#enso-strip').style.background = `linear-gradient(90deg, ${stops.join(', ')})`;
+  const veil = state.fcX != null ? `linear-gradient(90deg, transparent ${state.fcX}%, rgba(255,255,255,.5) ${state.fcX}%), ` : '';
+  $('#enso-strip').style.background = `${veil}linear-gradient(90deg, ${stops.join(', ')})`;
 }
 
 function setMonth(t) {
   state.t = clampT(t);
   const slider = $('#month');
   slider.value = state.t;
-  $('#month-label').textContent = tLabel(state.t);
-  const ph = state.enso[state.t], v = state.oni[state.t];
+  $('#month-label').innerHTML = esc(tLabel(state.t)) + (isFuture(state.t) ? ' <span class="fc-tag">forecast</span>' : '');
+  const ph = state.enso[state.t], v = state.oni[state.t], fc = state.oniFc[state.t];
   const badge = $('#enso-badge');
   badge.textContent = ph ? `${ENSO[ph].label} · ONI ${signed(v, 2)}` : 'ONI n/a';
-  badge.className = 'badge ' + (ph || '');
-  $('#oni-text').innerHTML = `ONI for the ${ONI_SEASONS[state.t % 12]} season centred on ${tLabel(state.t)}. ` +
-    'Coloured as an El Niño / La Niña episode when it stays beyond ±0.5 °C for 5+ overlapping seasons. Click the chart to jump.';
+  badge.className = 'badge ' + (ph || '') + (fc ? ' fc' : '');
+  badge.title = fc ? 'Forecast ONI' : 'Observed ONI';
+  $('#oni-text').innerHTML = (fc
+    ? `<b>Forecast</b> ONI for the ${ONI_SEASONS[state.t % 12]} season centred on ${tLabel(state.t)}, from the ECMWF seasonal ` +
+      'forecast of Niño 3.4 sea temperature (via Meteomatics), anchored to NOAA\'s latest observation. '
+    : `ONI for the ${ONI_SEASONS[state.t % 12]} season centred on ${tLabel(state.t)}. `) +
+    'Coloured as an El Niño / La Niña episode when it stays beyond ±0.5 °C for 5+ overlapping seasons; the shaded end is forecast. Click the chart to jump.';
   const sel = $('#oni-sel');
   if (sel) {
     const x = (state.t + 0.5) * 300 / state.n;
@@ -370,6 +398,16 @@ function paintClimate() {
   const colors = rampFor(key, mode);
   const v = state.meta.vars[key];
   $('#climate-ramp').innerHTML = rampHtml(colors, dom, mode === 'anom' ? `${v.units} vs normal` : v.units, Math.max(0, varDigits(key) - (mode === 'anom' ? 0 : 1)));
+  const note = $('#climate-note');
+  if (isExt(state.t)) {
+    note.hidden = false;
+    note.innerHTML = !v.forecast
+      ? `<b>No forecast for ${esc(v.label.toLowerCase())}.</b> Meteomatics' seasonal forecast does not include it; ` +
+        `NASA POWER has it up to ${tLabel(state.nObs - 1)}.`
+      : isFuture(state.t)
+        ? '<b>Forecast:</b> ECMWF seasonal forecast via Meteomatics, bias-corrected to NASA POWER for each ecodistrict.'
+        : '<b>Recent month</b> not yet in NASA POWER: Meteomatics analysis, bias-corrected to NASA POWER.';
+  } else note.hidden = true;
   if (!mapReady()) return;
   map.setPaintProperty('climate-fill', 'fill-color', rampExpr('v', colors, dom));
   state.ids.forEach((id, r) => map.setFeatureState({ source: 'ed', id }, { v: climateValue(key, r, state.t) }));
@@ -552,7 +590,7 @@ function renderSim() {
   const s = snapshot(id, state.t);
   const c = cropRec(id);
   you.innerHTML = `<div class="you">
-    <div class="you-head"><b>Ecodistrict ${id}</b> in <b>${tLabel(state.t)}</b> ${ensoChip(state.t)}</div>
+    <div class="you-head"><b>Ecodistrict ${id}</b> in <b>${tLabel(state.t)}</b>${isFuture(state.t) ? ' <span class="fc-tag">forecast</span>' : ''} ${ensoChip(state.t)}</div>
     <div class="muted">${esc(districtName(id))} · ${Number(r.area).toLocaleString()} km²</div>
     <dl>
       <dt>Mean temp</dt><dd>${fmt(s.temp)} °C <span class="muted">(${signed(s.tempA)})</span></dd>
@@ -574,7 +612,11 @@ function renderSim() {
   }
   state.matches = simMatches(id, state.t);
   if (mapReady()) for (const m of state.matches) map.setFeatureState({ source: 'ed', id: m.id }, { match: m.score });
-  res.innerHTML = `<h2>Most similar: ${MONTHS[state.t % 12]} in other years</h2><ol class="matches">` + state.matches.map((m) => {
+  const head = isExt(state.t)
+    ? `<h2>${isFuture(state.t) ? 'The forecast' : 'This month'} looks most like these past ${MONTHS[state.t % 12]}s</h2>` +
+      '<p class="small">Compared on what Meteomatics provides (temperature, precipitation, humidity, wind, sun, snow depth, frost days) plus soil; soil wetness and evapotranspiration are not forecast.</p>'
+    : `<h2>Most similar: ${MONTHS[state.t % 12]} in other years</h2>`;
+  res.innerHTML = `${head}<ol class="matches">` + state.matches.map((m) => {
     const q = snapshot(m.id, m.t);
     return `<li data-id="${m.id}" data-t="${m.t}">
       <div class="m-top"><span class="rank">${m.rank}</span><b>${tLabel(m.t)}</b> ${ensoChip(m.t)}<span class="score">${m.score}</span></div>
@@ -592,7 +634,7 @@ function buildUI() {
   const slider = $('#month');
   slider.max = state.n - 1;
   $('#tmin').textContent = tLabel(0);
-  $('#tmax').textContent = tLabel(state.n - 1);
+  $('#tmax').textContent = tLabel(state.n - 1) + (isFuture(state.n - 1) ? ' (forecast)' : '');
   slider.addEventListener('input', () => setMonth(Number(slider.value)));
   drawOni();
 

@@ -1,0 +1,76 @@
+{
+ "source": "Meteomatics ecmwf-mmsf (ECMWF seasonal) sea surface temperature over Nino 3.4, anchored to NOAA CPC OISST (https://www.cpc.ncep.noaa.gov/data/indices/sstoi.indices)",
+ "issued": "2026-11-14",
+ "method": "monthly model SST minus its offset from the last observed OISST month, minus the 1991-2020 OISST climatology, plus -0.32 (average ONI - OISST over the last 3 seasons); 3-month running means centred on each month",
+ "last_observed_oisst": "2026-10",
+ "monthly": {
+  "2026-08": 2.2,
+  "2026-09": 2.52,
+  "2026-10": 2.93,
+  "2026-11": 3.0,
+  "2026-12": 3.24,
+  "2027-01": 3.15,
+  "2027-02": 2.78,
+  "2027-03": 2.12,
+  "2027-04": 1.64,
+  "2027-05": 1.35
+ },
+ "data": [
+  {
+   "season": "SON",
+   "year": 2026,
+   "anom": 2.82,
+   "forecast": true,
+   "months_used": 3
+  },
+  {
+   "season": "OND",
+   "year": 2026,
+   "anom": 3.06,
+   "forecast": true,
+   "months_used": 3
+  },
+  {
+   "season": "NDJ",
+   "year": 2026,
+   "anom": 3.13,
+   "forecast": true,
+   "months_used": 3
+  },
+  {
+   "season": "DJF",
+   "year": 2027,
+   "anom": 3.06,
+   "forecast": true,
+   "months_used": 3
+  },
+  {
+   "season": "JFM",
+   "year": 2027,
+   "anom": 2.68,
+   "forecast": true,
+   "months_used": 3
+  },
+  {
+   "season": "FMA",
+   "year": 2027,
+   "anom": 2.18,
+   "forecast": true,
+   "months_used": 3
+  },
+  {
+   "season": "MAM",
+   "year": 2027,
+   "anom": 1.7,
+   "forecast": true,
+   "months_used": 3
+  },
+  {
+   "season": "AMJ",
+   "year": 2027,
+   "anom": 1.49,
+   "forecast": true,
+   "months_used": 2
+  }
+ ]
+}

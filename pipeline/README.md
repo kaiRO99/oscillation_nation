@@ -9,9 +9,9 @@ build them are in `pipeline/`; downloads and caches go in git-ignored `raw/` fol
 ## Map layers
 
 - **Monthly El Niño timeline.** A slider over every month from Jan 1981 to Dec 2025, with the ONI chart and a strip underneath coloured by phase: red = El Niño, green = neutral, blue = La Niña. A month counts as El Niño / La Niña when it is part of a run of at least 5 overlapping seasons beyond ±0.5 °C (NOAA's definition).
-- **Datasets, each with its own checkbox** and all averaged per ecodistrict:
-  - *NASA POWER climate* – 15 monthly variables (temperature, precipitation, snow, humidity, solar, wind, evapotranspiration, soil wetness, frost days), as the monthly value or the difference from the 1991–2020 normal.
-  - *Soil* – water holding capacity, texture, organic carbon, pH, drainage and dominant soil order from the Soil Landscapes of Canada (farmland only).
+- **Datasets, each with its own checkbox** and all averaged per ecodistrict. **Temperature** and **Precipitation** sit at the top with their pickers always visible, plus one **Difference from 1991–2020 normal** switch for every monthly variable; everything else is under a collapsed **Advanced** section (its header counts the layers switched on inside it):
+  - *Temperature* / *Precipitation* / *Other climate* (Advanced) – NASA POWER monthly climate. The three share one map fill, so switching one on (or picking in it) switches the others off. In forecast months the tooltip, the selected-ecodistrict panel and the comparison report give an **80% range** for temperature and precipitation (see *Forecast ranges* below).
+  - *Soil* (Advanced) – one picker for monthly soil moisture (NASA POWER, follows the timeline) and the fixed soil properties: water holding capacity, texture, organic carbon, pH, drainage and dominant soil order from the Soil Landscapes of Canada (farmland only).
   - *AAFC crops planted* – bubbles sized by the share of land in crops for the slider's year, coloured by the largest crop group.
   - *Crop yield* – estimated yield (kg/ha) per ecodistrict for the slider's year, for 15 major field crops, shown as the raw value, as the % above/below that ecodistrict's own long-term average, or crossed with seeded area. Non-farm ecodistricts are left blank and places where the crop is barely grown are faded (see below).
   - *Seeded area* – hectares of a crop actually planted, by Census Agricultural Region, for the slider's year.
@@ -27,24 +27,33 @@ Everything a user can currently see or select, grouped by map layer. This is the
 - [x] Oceanic Niño Index (ONI) value per month, Jan 1981 – Dec 2025
 - [x] ENSO phase strip (El Niño / Neutral / La Niña, NOAA's ≥5-season rule)
 
-**NASA POWER climate** (`lyr-climate`) — 15 monthly variables, shown as the raw value *or* the anomaly vs the 1991–2020 normal:
-- [x] Mean temperature (`T2M`, °C)
-- [x] Max temperature (`T2M_MAX`, °C)
-- [x] Min temperature (`T2M_MIN`, °C)
-- [x] Dew point (`T2MDEW`, °C)
-- [x] Precipitation (`PRECIP`, mm)
-- [x] Snowfall, water equiv. (`SNOWFALL`, mm)
-- [x] Snow depth (`SNODP`, cm)
-- [x] Relative humidity (`RH2M`, %)
-- [x] Solar radiation (`SOLAR`, MJ/m²/day)
-- [x] Wind speed (`WS2M`, m/s)
-- [x] Evapotranspiration (`ET`, mm)
-- [x] Surface soil wetness (`GWETTOP`, 0–1)
-- [x] Root-zone soil wetness (`GWETROOT`, 0–1)
-- [x] Profile soil wetness (`GWETPROF`, 0–1)
+**Climate** — monthly variables, each shown as the raw value *or* (one shared switch, `climate-anom`) the anomaly vs the 1991–2020 normal. Three pickers draw into one map fill; only one is on at a time. `?v=<key>` opens the map on a variable.
+
+*Temperature* (`lyr-temp`, top of the panel):
+- [x] Mean (`T2M`, °C)
+- [x] Hottest of the month (`T2M_MAX`, °C; the month's single warmest reading, not the average daily high)
+- [x] Coldest of the month (`T2M_MIN`, °C)
 - [x] Frost days (`FROST_DAYS`, days)
 
-**Soil** (`lyr-soil`, farmland ecodistricts only) — 8 properties from the Soil Landscapes of Canada:
+*Precipitation* (`lyr-precip`, top of the panel):
+- [x] Total (`PRECIP`, mm)
+- [x] Average per day (`PRECIP_DAILY`, mm/day; total ÷ days in the month, computed in the browser. Same map pattern as the total within a month; it only matters when comparing months of different length)
+- [x] Wet days, ≥ 1 mm of rain or melted snow (`WET_DAYS`, days; NASA POWER **daily**, `build_wet_days.py`)
+- [x] Average per wet day (`WET_DAY_PRECIP`, mm; precipitation *on* wet days ÷ wet days, the "simple daily intensity index". Not the month's total ÷ wet days: drizzle on days under 1 mm is ~9% of the total (median), which would inflate it)
+- Wet days and per-wet-day: farmland ecodistricts only (the 454 that `fetch_power_daily.py` covers), observed months only (no forecast: counting wet days in an ensemble *mean* would count its drizzle). Counts are averaged over an ecodistrict's sample points, so they can be fractional. Spot-checked: annual totals and seasonality are right (Abbotsford wet winters, Regina's June peak), and wet-day counts run high, with less on each day, as reanalysis does relative to a rain gauge.
+
+*Other climate* (`lyr-other`, Advanced): dew point (`T2MDEW`), snowfall water equiv. (`SNOWFALL`), snow depth (`SNODP`), relative humidity (`RH2M`), solar radiation (`SOLAR`), wind speed (`WS2M`), evapotranspiration (`ET`).
+
+**Forecast ranges** (`climate-range.js`, shared by the map and the report) — in forecast months, an 80% range for mean / hottest / coldest temperature, frost days, and total / per-day precipitation:
+- [x] Tooltip, selected-ecodistrict panel and comparison report; the map itself shows the middle estimate, tagged *forecast*
+- Method: the forecast is ECMWF's ensemble **mean** only (no members, no re-forecasts), so the forecast's skill can't be measured. The range is the forecast plus the 10th–90th percentile of how far that calendar month has strayed in that ecodistrict over the observed record (temperatures, frost days: departures from the ecodistrict's own linear trend; precipitation: the month's total ÷ its mean, so the range is skewed and stays above zero). It gives the forecast no credit for skill, and it can't allow for the forecast itself being off.
+- Checked: the browser's ranges match an independent numpy computation exactly (Regina, Jan 2027).
+- Caveat on the current forecast (issued 2026-11-14): its Nov–Feb precipitation is unusually dry for an ensemble mean (median farmland ecodistrict 55–68% of normal; 33–43% of them under half of normal, a level only 11% of observed months reach). The ERA5 → POWER correction is not the cause (Oct 2026 corrected ERA5 is 93% of POWER daily). More likely the seasonal model's own drift, which `fetch_forecast.py` doesn't remove (no re-forecasts), or a real El Niño signal. The ranges inherit whatever bias the centre has.
+
+**Soil** (`lyr-soil`, Advanced) — one picker:
+- [x] Soil moisture, monthly from NASA POWER, following the timeline (`GWETTOP` surface, `GWETROOT` root zone, `GWETPROF` profile; 0–1; no forecast)
+
+and 8 fixed properties from the Soil Landscapes of Canada (farmland ecodistricts only):
 - [x] Available water holding capacity, 0–100 cm (`awhc`, mm)
 - [x] Sand, 0–30 cm (`sand`, %)
 - [x] Silt, 0–30 cm (`silt`, %)
@@ -114,7 +123,8 @@ python pipeline/fetch_crops.py           # AAFC crop inventory per ecodistrict a
 python pipeline/build_client_data.py     # merges boundaries, soil and crops -> data/ecodistricts.json
 python pipeline/build_yield.py           # SLC crop-yield CSV -> data/yield.json (per ecodistrict/year/crop; needs numpy)
 python pipeline/build_seeded.py          # StatCan seeded area by region + province -> data/seeded.json (downloads both tables)
-python pipeline/fetch_power_daily.py     # daily NASA POWER for farmland ecodistricts -> data/raw/power_daily_indices.npz (heat degree-days, dry spells, downpours, frost; ~20 min first time at the default 60 requests/min, then only the current year)
+python pipeline/fetch_power_daily.py     # daily NASA POWER for farmland ecodistricts -> data/raw/power_daily_indices.npz (heat degree-days, dry spells, downpours, frost, wet days; ~20 min first time at the default 60 requests/min, then only the current year; ~3 min from cache)
+python pipeline/build_wet_days.py        # wet days + precipitation per wet day -> data/climate/WET_DAYS.bin, WET_DAY_PRECIP.bin (run after fetch_power.py and fetch_forecast.py: fetch_power.py rewrites meta.json without them)
 python pipeline/build_yield_forecast.py  # next-season yield forecast -> data/yield_forecast.json (needs numpy; ~1 min; run after fetch_forecast.py; --compare re-scores model forms)
 python pipeline/evaluate_yield_forecast.py  # walk-forward accuracy test of that forecast (~1 min)
 python pipeline/similarity.py            # precomputed matches -> data/similarity/<id>.bin (needs numpy)
@@ -129,7 +139,7 @@ python pipeline/build_irrigation.py      # StatCan irrigation volume by province
 | `data/ecodistricts.json` | per ecodistrict: names, label point, soil, crops by year |
 | `data/yield.json` | per ecodistrict: estimated yield (kg/ha) by crop and year, for 15 major field crops; per crop: resolution (`res`), last real year (`last`), dropped copied years (`dropped`), and single-crop repeats kept but flagged (`suspect`) |
 | `data/seeded.json` | per region series: hectares seeded by crop and year (12 crops); ecodistrict → region links as runs of years; province totals per crop and year |
-| `data/climate/<VAR>.bin` + `meta.json` | Int16 `[ecodistrict][month]` per climate variable, loaded when picked |
+| `data/climate/<VAR>.bin` + `meta.json` | Int16 `[ecodistrict][month]` per climate variable, loaded when picked; `WET_DAYS` / `WET_DAY_PRECIP` (from daily data, `coverage: "farmland"`) come from `build_wet_days.py` |
 | `data/similarity/<id>.bin` + `meta.json` | top 10 matches per month for one ecodistrict, loaded when picked |
 | `data/oni.json` | NOAA Oceanic Niño Index |
 | `data/oni_forecast.json` | forecast ONI seasons from ECMWF seasonal sea-surface temperature (`fetch_forecast.py`) |

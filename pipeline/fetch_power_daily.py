@@ -12,6 +12,8 @@ Writes  data/raw/power_daily_indices.npz       per ecodistrict and month (float3
           CHU     Ontario corn heat units
           KFROST  days with Tmin <= -2 C (killing frost)
           RDAYS   days with >= 1 mm precipitation
+          PWET    precipitation that fell on those days (mm); PWET / RDAYS = mm per wet day
+                  (build_wet_days.py)
           DRY     longest run of days with < 1 mm within the month
           P5MAX   wettest 5 days (mm), attributed to the month the 5-day window ends in
           PRECIP  total precipitation (mm)
@@ -46,7 +48,7 @@ POWER = "https://power.larc.nasa.gov/api/temporal/daily/point"
 UA = {"User-Agent": "oscillation-nation-data-script"}
 PARAMS = ["T2M_MAX", "T2M_MIN", "PRECTOTCORR"]
 KDD_BASES = list(range(26, 34))
-INDICES = [f"KDD{t}" for t in KDD_BASES] + ["HOT30", "GDD5", "CHU", "KFROST", "RDAYS", "DRY", "P5MAX", "PRECIP"]
+INDICES = [f"KDD{t}" for t in KDD_BASES] + ["HOT30", "GDD5", "CHU", "KFROST", "RDAYS", "PWET", "DRY", "P5MAX", "PRECIP"]
 
 
 _LOCK = threading.Lock()
@@ -134,6 +136,7 @@ def monthly_indices(raw, day0, n_days, mon_idx, n_months):
         "CHU": np.where(np.isnan(tx) | np.isnan(tn), np.nan, (ymax + ymin) / 2),
         "KFROST": np.where(np.isnan(tn), np.nan, tn <= -2),
         "RDAYS": np.where(np.isnan(pr), np.nan, wet),
+        "PWET": np.where(wet, pr, np.where(np.isnan(pr), np.nan, 0.0)),
         "PRECIP": pr,
     }
     out = np.full((len(INDICES), n_months), np.nan)

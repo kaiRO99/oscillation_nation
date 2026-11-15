@@ -28,6 +28,35 @@ const RAMPS = {
 const VAR_KIND = {
   T2M: 'temp', T2M_MAX: 'temp', T2M_MIN: 'temp', T2MDEW: 'temp', FROST_DAYS: 'cold', SNODP: 'cold', SNOWFALL: 'cold',
   PRECIP: 'wet', RH2M: 'wet', ET: 'wet', GWETTOP: 'wet', GWETROOT: 'wet', GWETPROF: 'wet', SOLAR: 'sun', WS2M: 'wind',
+  PRECIP_DAILY: 'wet', WET_DAYS: 'wet', WET_DAY_PRECIP: 'wet',
+};
+// Climate variables are drawn by one map fill, picked in three places; only one of the three is on at a time.
+// vars: key -> label in that picker (null = every climate variable not picked elsewhere).
+const CLIMATE_GROUPS = {
+  temp: { vars: { T2M: 'Mean', T2M_MAX: 'Hottest of the month', T2M_MIN: 'Coldest of the month', FROST_DAYS: 'Frost days' } },
+  precip: { vars: { PRECIP: 'Total', PRECIP_DAILY: 'Average per day', WET_DAYS: 'Wet days (≥ 1 mm)', WET_DAY_PRECIP: 'Average per wet day' } },
+  other: { vars: null },
+};
+for (const [g, c] of Object.entries(CLIMATE_GROUPS)) Object.assign(c, { layer: `lyr-${g}`, pick: `${g}-var`, ramp: `${g}-ramp`, info: `${g}-info`, note: `${g}-note` });
+const SOIL_MOISTURE = ['GWETTOP', 'GWETROOT', 'GWETPROF'];  // monthly climate variables, picked in the Soil layer
+// computed in the browser from another variable (loadVar): mm per day = monthly total / days in the month
+const DERIVED_VARS = {
+  PRECIP_DAILY: { from: 'PRECIP', label: 'Average daily precipitation', units: 'mm/day', scale: 0.01 },
+};
+// what a variable is, for its layer's info popover
+const VAR_NOTE = {
+  PRECIP: 'Total rain and melted snow over the month.',
+  PRECIP_DAILY: 'The month’s total divided by its number of days, so months of different lengths compare fairly. ' +
+    'Within one month the map has the same pattern as the total.',
+  WET_DAYS: 'Days with at least 1 mm of rain or melted snow, counted from NASA POWER <b>daily</b> data. ' +
+    '<b>Farmland ecodistricts only.</b> Averaged over each ecodistrict’s sample points, so it can be a fraction; ' +
+    'reanalysis grid cells (~50 km) tend to count more wet days, with less on each, than a single rain gauge would.',
+  WET_DAY_PRECIP: 'How heavy it is when it does rain: precipitation on wet days (≥ 1 mm) divided by the number of ' +
+    'wet days, from NASA POWER <b>daily</b> data. Drizzle on drier days doesn’t count. Blank in a month with no wet ' +
+    'days. <b>Farmland ecodistricts only.</b>',
+  T2M_MAX: 'The warmest temperature of the month.',
+  T2M_MIN: 'The coldest temperature of the month.',
+  FROST_DAYS: 'Days with a minimum below 0 °C.',
 };
 const SOIL_KIND = { awhc: 'awhc', sand: 'soil', silt: 'soil', clay: 'soil', oc: 'soil', ph: 'soil', drainage: 'wet' };
 const SOIL_ORDER_COLORS = {
@@ -54,11 +83,14 @@ const withV = (path) => `${path}?v=${V}`;
 const $ = (s) => document.querySelector(s);
 const fmt = (v, nd = 1) => (v == null || Number.isNaN(v) ? '–' : Number(v).toFixed(nd));
 const signed = (v, nd = 1) => (v == null ? '–' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(nd));
+const noNegZero = (v, nd) => (v != null && Number(v.toFixed(nd)) === 0 ? 0 : v);  // -0.3 at 0 decimals -> 0, not "−0"
+const num = (v, nd = 1) => fmt(noNegZero(v, nd), nd).replace('-', '−');  // value with a true minus sign
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const state = {
   t: 0, y0: 1981, n: 0,
-  climateVar: 'T2M', climateMode: 'value', soilVar: 'awhc',
+  climateVar: 'T2M', climateMode: 'value', soilVar: 'awhc', spreads: {},
+  groupVar: { temp: 'T2M', precip: 'PRECIP', other: null },  // each climate picker's choice
   yieldCrop: 'WHTSPG', yieldMode: 'value', yield: null, yieldIdx: {}, yieldMeans: {}, yieldDomains: {},
   seededCrop: 'WHTSPG', seeded: null, seededIdx: {}, seededDomains: {}, seededMaxCache: {},
   finance: null, financeMetric: 'total_net', provPts: null, financeMeans: {},
@@ -86,6 +118,7 @@ const map = new maplibregl.Map({
 });
 map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+buildIntro(); // straight away, so it reads while the data loads
 
 const getJSON = (p) => fetch(withV(p)).then((r) => {
   if (!r.ok) throw new Error(`${p}: ${r.status}`);
@@ -113,6 +146,10 @@ const uiReady = dataReady.then(async ([oni, eco, meta, aci, simMeta, oniFc, yiel
   state.eco = eco;
   state.yieldFc = yieldFc;  // next season's yield forecast (pipeline/build_yield_forecast.py)
   state.meta = meta;
+  for (const [k, d] of Object.entries(DERIVED_VARS)) {
+    const base = meta.vars[d.from];
+    if (base) meta.vars[k] = { ...d, derived: d.from, forecast: base.forecast };
+  }
   state.simMeta = simMeta;
   state.yield = yieldData;
   state.finance = financeData;
@@ -152,9 +189,8 @@ const uiReady = dataReady.then(async ([oni, eco, meta, aci, simMeta, oniFc, yiel
   const q = new URLSearchParams(location.search);
   const qm = /^(\d{4})-(\d{2})$/.exec(q.get('m') || '');
   state.t = qm ? clampT((Number(qm[1]) - state.y0) * 12 + Number(qm[2]) - 1) : clampT(state.nowT ?? state.n - 6); // default: this month
-  if (meta.vars[q.get('v')]) state.climateVar = q.get('v');
 
-  buildUI();
+  buildUI(meta.vars[q.get('v')] ? q.get('v') : null);
   await loadVar(state.climateVar);
   setMonth(state.t);
   const qd = Number(q.get('d'));
@@ -480,7 +516,7 @@ function buildTimeControls() {
 
   // keyboard: arrows step a month, Shift + arrows a year (when not typing in a field)
   document.addEventListener('keydown', (e) => {
-    if (e.target.closest('input, select, textarea') || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target.closest('input, select, textarea, dialog') || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault();
       setMonth(state.t + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 12 : 1));
@@ -533,10 +569,23 @@ function setMonth(t) {
 // ---------------------------------------------------------------------------
 async function loadVar(key) {
   if (!state.bins[key]) {
-    state.bins[key] = fetch(withV(`data/climate/${key}.bin`)).then((r) => r.arrayBuffer()).then((b) => new Int16Array(b));
+    const from = state.meta.vars[key]?.derived;
+    state.bins[key] = from
+      ? loadVar(from).then((base) => perDay(base, state.meta.vars[from].scale, state.meta.vars[key].scale))
+      : fetch(withV(`data/climate/${key}.bin`)).then((r) => r.arrayBuffer()).then((b) => new Int16Array(b));
   }
   if (state.bins[key] instanceof Promise) state.bins[key] = await state.bins[key];
   return state.bins[key];
+}
+
+// monthly total -> average per day of that month, in the same Int16 layout (scale sOut)
+function perDay(base, sIn, sOut) {
+  const n = state.n, out = new Int16Array(base.length);
+  const days = Array.from({ length: n }, (_, t) => daysInMonth(tYear(t), t % 12));
+  for (let i = 0; i < base.length; i++) {
+    out[i] = base[i] === -32768 ? -32768 : Math.round(base[i] * sIn / days[i % n] / sOut);
+  }
+  return out;
 }
 
 function climate(key, row, t) {
@@ -569,6 +618,19 @@ function climateValue(key, row, t, mode = state.climateMode) {
   if (v == null || mode === 'value') return v;
   const n = normals(key)[row * 12 + (t % 12)];
   return Number.isNaN(n) ? null : v - n;
+}
+
+// 80% range [lo, hi] in a forecast month (method: climate-range.js), in the given mode, or null
+function fcRange(key, row, t, mode = state.climateMode) {
+  if (!isFuture(t) || !(key in FC_RANGE_KIND)) return null;
+  const f = climate(key, row, t);
+  if (f == null) return null;
+  const m = t % 12, ck = `${key}.${row}.${m}`;
+  if (!(ck in state.spreads)) state.spreads[ck] = climateSpread((u) => climate(key, row, u), state.nObs, m, FC_RANGE_KIND[key]);
+  const r = climateRange(key, f, state.spreads[ck], daysInMonth(tYear(t), m));
+  if (!r || mode === 'value') return r;
+  const n = normals(key)[row * 12 + m];
+  return Number.isNaN(n) ? null : [r[0] - n, r[1] - n];
 }
 
 function quantile(vals, q) {
@@ -625,6 +687,7 @@ const mapReady = () => map.getSource('ed') && map.isSourceLoaded('ed');
 
 function paintAll() {
   paintClimate();
+  if ($('#lyr-soil').checked && state.meta.vars[state.soilVar]) paintSoil();  // soil moisture follows the timeline
   paintCrops();
   paintYield();
   paintSeeded();
@@ -632,29 +695,74 @@ function paintAll() {
   paintIrrigation();
 }
 
+// which climate picker (CLIMATE_GROUPS key) is drawn, or null
+const activeGroup = () => Object.keys(CLIMATE_GROUPS).find((g) => $('#' + CLIMATE_GROUPS[g].layer).checked) || null;
+
+// info popover for a monthly climate variable at the slider's month
+function climateNoteHtml(key) {
+  const v = state.meta.vars[key];
+  let when;
+  if (!isExt(state.t)) when = `<b>Observed:</b> NASA POWER ${v.coverage === 'farmland' ? 'daily' : 'monthly'} data, averaged over each ecodistrict.`;
+  else if (!v.forecast) when = `<b>No forecast for this variable.</b> NASA POWER has it up to ${tLabel(state.nObs - 1)}.`;
+  else if (!isFuture(state.t)) when = '<b>Recent month</b> not yet in NASA POWER: Meteomatics analysis (ERA5), bias-corrected to NASA POWER.';
+  else {
+    when = '<b>Forecast:</b> ECMWF seasonal forecast (the mean of its 51 ensemble members) via Meteomatics, ' +
+      'bias-corrected to NASA POWER for each ecodistrict. The map shows that middle estimate.';
+    if (key in FC_RANGE_KIND) {
+      when += ` Hover or pick an ecodistrict for its <b>80% range</b>: the forecast plus how far ${MONTHS[state.t % 12]} ` +
+        `has swung from year to year there since ${state.y0} (${FC_RANGE_KIND[key] === 'mul' ? 'as a share of its usual total' : 'trend removed'}). ` +
+        'We only have the ensemble mean, not the members or ECMWF’s past forecasts to score it against, so the range ' +
+        'counts only that usual swing: it gives the forecast no credit for skill, and it can’t allow for the forecast itself being off.';
+    }
+  }
+  return `<b>${esc(v.label)}</b> (${esc(v.units)}). ${VAR_NOTE[key] || ''}<br><br>${when}`;
+}
+
 function paintClimate() {
+  // each picker's info describes its own choice; only the drawn one gets the "no forecast" warning
+  const on = activeGroup();
+  for (const [g, c] of Object.entries(CLIMATE_GROUPS)) {
+    const k = state.groupVar[g];
+    if (k) $('#' + c.note).innerHTML = climateNoteHtml(k);
+    $('#' + c.info).classList.toggle('warn', g === on && isExt(state.t) && !state.meta.vars[k]?.forecast);
+  }
+  if (!on) return;
   const key = state.climateVar, mode = state.climateMode;
   if (!(state.bins[key] instanceof Int16Array)) return;
   const dom = climateDomain(key, mode, state.t % 12);
   const colors = rampFor(key, mode);
   const v = state.meta.vars[key];
-  $('#climate-ramp').innerHTML = rampHtml(colors, dom, mode === 'anom' ? `${v.units} vs normal` : v.units, Math.max(0, varDigits(key) - (mode === 'anom' ? 0 : 1)));
-  const note = $('#climate-note');
-  $('#climate-info')?.classList.toggle('warn', isExt(state.t) && !v.forecast);
-  if (isExt(state.t)) {
-    note.innerHTML = !v.forecast
-      ? `<b>No forecast for this variable.</b> NASA POWER has it up to ${tLabel(state.nObs - 1)}.`
-      : isFuture(state.t)
-        ? '<b>Forecast:</b> ECMWF seasonal forecast via Meteomatics, bias-corrected to NASA POWER for each ecodistrict.'
-        : '<b>Recent month</b> not yet in NASA POWER: Meteomatics analysis, bias-corrected to NASA POWER.';
-  } else note.innerHTML = '<b>Observed:</b> NASA POWER monthly data, averaged over each ecodistrict.';
+  $('#' + CLIMATE_GROUPS[on].ramp).innerHTML = (isFuture(state.t) && v.forecast ? '<span class="fc-tag">forecast</span>' : '') +
+    rampHtml(colors, dom, mode === 'anom' ? `${v.units} vs normal` : v.units, Math.max(0, varDigits(key) - (mode === 'anom' ? 0 : 1)));
   if (!mapReady()) return;
   map.setPaintProperty('climate-fill', 'fill-color', rampExpr('v', colors, dom));
   state.ids.forEach((id, r) => map.setFeatureState({ source: 'ed', id }, { v: climateValue(key, r, state.t) }));
 }
 
+const SOIL_NOTE = 'Soil Landscapes of Canada v3.2, averaged per ecodistrict. Only farmland has detailed soil survey data.';
+
+// soil moisture: a monthly NASA POWER climate variable, drawn in the soil fill and following the timeline
+function paintSoilMoisture(key) {
+  const v = state.meta.vars[key], mode = state.climateMode;
+  $('#soil-note').innerHTML = climateNoteHtml(key);
+  $('#soil-info').classList.toggle('warn', isExt(state.t) && !v.forecast);
+  if (!(state.bins[key] instanceof Int16Array)) {
+    $('#soil-ramp').innerHTML = '<span>Loading…</span>';
+    loadVar(key).then(() => { if (state.soilVar === key) paintSoil(); });
+    return;
+  }
+  const dom = climateDomain(key, mode, state.t % 12), colors = rampFor(key, mode);
+  $('#soil-ramp').innerHTML = rampHtml(colors, dom, mode === 'anom' ? `${v.units} vs normal` : v.units, varDigits(key));
+  if (!mapReady()) return;
+  map.setPaintProperty('soil-fill', 'fill-color', rampExpr('s', colors, dom));
+  state.ids.forEach((id, r) => map.setFeatureState({ source: 'ed', id }, { s: climateValue(key, r, state.t) }));
+}
+
 function paintSoil() {
   const key = state.soilVar;
+  if (state.meta.vars[key]) return paintSoilMoisture(key);
+  $('#soil-note').textContent = SOIL_NOTE;
+  $('#soil-info').classList.remove('warn');
   const box = $('#soil-ramp');
   const recs = Object.entries(state.eco.d);
   if (key === 'order') {
@@ -1364,14 +1472,18 @@ function paintIrrigation() {
 
 function syncLegends() {
   for (const el of document.querySelectorAll('.legend[data-for]')) el.hidden = !$('#' + el.dataset.for).checked;
+  // how many data layers are on inside the collapsed "Advanced" section (boundaries don't count)
+  const n = [...document.querySelectorAll('#adv .layer-head input[type=checkbox]')].filter((b) => b.checked && b.id !== 'lyr-lines').length;
+  $('#adv-count').textContent = n ? `· ${n} on` : '';
 }
 
 function applyLayers() {
   syncLegends();
   if ($('#lyr-yield').checked) paintYield(); // legend + text even before the map is ready
+  if ($('#lyr-soil').checked) paintSoil();
   if (!map.getLayer('climate-fill')) return;
   const vis = (id, on) => map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
-  vis('climate-fill', $('#lyr-climate').checked);
+  vis('climate-fill', activeGroup() != null);
   vis('soil-fill', $('#lyr-soil').checked);
   vis('yield-fill', $('#lyr-yield').checked);
   vis('seeded-fill', $('#lyr-seeded').checked);
@@ -1382,7 +1494,6 @@ function applyLayers() {
   if (map.getLayer('drainage-fill')) { vis('drainage-fill', irrOn && !!basin); vis('drainage-line', irrOn && !!basin); }
   vis('crops', $('#lyr-crops').checked);
   vis('lines', $('#lyr-lines').checked);
-  if ($('#lyr-soil').checked) paintSoil();
   if ($('#lyr-yield').checked) paintYield();
   if ($('#lyr-seeded').checked) paintSeeded();
   if ($('#lyr-finance').checked) paintFinance();
@@ -1397,18 +1508,44 @@ function districtName(id) {
   return r ? `${r.region_name || 'Ecoregion ' + r.region}${r.prov ? ', ' + r.prov : ''}` : '';
 }
 
+// does this ecodistrict have any value for a climate variable? (the daily ones cover farmland only)
+const hasDataCache = {};
+function hasData(key, row) {
+  const ck = `${key}.${row}`;
+  if (!(ck in hasDataCache)) {
+    const a = state.bins[key];
+    if (!(a instanceof Int16Array)) return true;
+    hasDataCache[ck] = a.subarray(row * state.n, (row + 1) * state.n).some((x) => x !== -32768);
+  }
+  return hasDataCache[ck];
+}
+
+// tooltip line for a monthly climate variable: value or difference from normal, forecast tag, 80% range
+function climateTipHtml(k, row) {
+  const v = state.meta.vars[k], anom = state.climateMode === 'anom', nd = varDigits(k);
+  if (!(state.bins[k] instanceof Int16Array)) return `<div>${esc(v.label)}: <span class="muted">loading…</span></div>`;
+  const val = climateValue(k, row, state.t);
+  const show = (x) => (anom ? signed(noNegZero(x, nd), nd) : num(x, nd));
+  if (val == null) {
+    const why = isExt(state.t) && !v.forecast ? 'no forecast'
+      : v.coverage === 'farmland' && !hasData(k, row) ? 'farmland ecodistricts only'
+        : k === 'WET_DAY_PRECIP' ? 'no wet days' : 'no data';
+    return `<div>${esc(v.label)}: <b>–</b> <span class="muted">(${why})</span></div>`;
+  }
+  const r = fcRange(k, row, state.t);
+  return `<div>${esc(v.label)}: <b>${show(val)}</b> ${esc(v.units)}${anom ? ' vs normal' : ''}` +
+    `${isFuture(state.t) && v.forecast ? ' <span class="fc-tag">forecast</span>' : ''}</div>` +
+    (r ? `<div class="muted fc-range">80% range ${show(r[0])} to ${show(r[1])} ${esc(v.units)}${anom ? ' vs normal' : ''}</div>` : '');
+}
+
 function showTip(id, pt) {
   const r = state.eco.d[id];
   if (!r) return;
   const row = state.rowOf[id];
   let h = `<b>Ecodistrict ${id}</b><div class="muted">${esc(districtName(id))}</div>`;
-  if ($('#lyr-climate').checked) {
-    const k = state.climateVar, v = state.meta.vars[k];
-    const val = climateValue(k, row, state.t);
-    h += `<div>${esc(v.label)}: <b>${state.climateMode === 'anom' ? signed(val, varDigits(k)) : fmt(val, varDigits(k))}</b> ${esc(v.units)}` +
-      `${state.climateMode === 'anom' ? ' vs normal' : ''}</div>`;
-  }
-  if ($('#lyr-soil').checked && r.soil) {
+  if (activeGroup()) h += climateTipHtml(state.climateVar, row);
+  if ($('#lyr-soil').checked && state.meta.vars[state.soilVar]) h += climateTipHtml(state.soilVar, row);
+  else if ($('#lyr-soil').checked && r.soil) {
     const k = state.soilVar;
     const val = k === 'order' ? state.eco.soil_orders[r.soil.order] : r.soil[k];
     h += `<div>${esc(state.eco.soil_fields[k])}: <b>${esc(val ?? '–')}</b></div>`;
@@ -1569,13 +1706,19 @@ function renderSim() {
   const r = state.eco.d[id];
   const s = snapshot(id, state.t);
   const c = cropRec(id);
+  const row = state.rowOf[id];
+  const rng = (key, nd, u) => {
+    const x = fcRange(key, row, state.t, 'value');
+    return x ? `<div class="muted">80%: ${num(x[0], nd)} to ${num(x[1], nd)} ${u}</div>` : '';
+  };
   you.innerHTML = `<div class="you">
     <div class="you-head"><b>Ecodistrict ${id}</b> in <b>${tLabel(state.t)}</b>${isFuture(state.t) ? ' <span class="fc-tag">forecast</span>' : ''} ${ensoChip(state.t)}
-      ${infoHtml(`In brackets: difference from the ${NORMAL[0]}–${NORMAL[1]} normal for ${MONTHS[state.t % 12]}.`)}</div>
+      ${infoHtml(`In brackets: difference from the ${NORMAL[0]}–${NORMAL[1]} normal for ${MONTHS[state.t % 12]}.` +
+        (isFuture(state.t) ? ' Forecast months: the middle estimate and its 80% range (how it’s worked out: the Temperature and Precipitation info).' : ''))}</div>
     <div class="muted">${esc(districtName(id))} · ${Number(r.area).toLocaleString()} km²</div>
     <dl>
-      <dt>Mean temp</dt><dd>${fmt(s.temp)} °C <span class="muted">(${signed(s.tempA)})</span></dd>
-      <dt>Precip</dt><dd>${fmt(s.precip, 0)} mm <span class="muted">(${signed(s.precipA, 0)})</span></dd>
+      <dt>Mean temp</dt><dd>${num(s.temp)} °C <span class="muted">(${signed(s.tempA)})</span>${rng('T2M', 1, '°C')}</dd>
+      <dt>Precip</dt><dd>${fmt(s.precip, 0)} mm <span class="muted">(${signed(s.precipA, 0)})</span>${rng('PRECIP', 0, 'mm')}</dd>
       <dt>Root-zone wetness</dt><dd>${fmt(s.wet, 2)}</dd>
       ${r.soil ? `<dt>Soil</dt><dd>${esc(state.eco.soil_orders[r.soil.order] ?? '–')}, ${fmt(r.soil.awhc, 0)} mm water holding</dd>` : ''}
       ${c && c.crop > 0 ? `<dt>Crops ${cropYear()}</dt><dd>${fmt(c.crop, 0)}% of land · mostly ${esc(state.classes[c.top]?.[0] ?? '–')}</dd>` : ''}
@@ -1608,6 +1751,22 @@ function renderSim() {
       <a class="report-link" href="${reportUrl(id, state.t, m.id, m.t)}" target="_blank" rel="noopener">Generate report ↗</a>
     </li>`;
   }).join('') + '</ol>';
+}
+
+// ---------------------------------------------------------------------------
+// Intro: opens on the first visit only; the ? in the panel header reopens it
+// ---------------------------------------------------------------------------
+function buildIntro() {
+  const dlg = $('#intro'), btn = $('#intro-open');
+  if (!dlg || typeof dlg.showModal !== 'function') { if (btn) btn.hidden = true; return; }
+  const KEY = 'oscillation-nation:intro-seen';
+  const open = () => { if (!dlg.open) dlg.showModal(); };
+  btn.addEventListener('click', open);
+  dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); }); // click on the backdrop
+  dlg.addEventListener('close', () => { try { localStorage.setItem(KEY, '1'); } catch (_) { /* storage blocked */ } });
+  let seen = false;
+  try { seen = localStorage.getItem(KEY) === '1'; } catch (_) { /* storage blocked: show it */ }
+  if (!seen) open();
 }
 
 // ---------------------------------------------------------------------------
@@ -1654,7 +1813,7 @@ function buildInfo() {
 // ---------------------------------------------------------------------------
 // UI
 // ---------------------------------------------------------------------------
-function buildUI() {
+function buildUI(qv) {
   const slider = $('#month');
   slider.max = state.n - 1;
   $('#tmin').textContent = tLabel(0);
@@ -1675,25 +1834,67 @@ function buildUI() {
     timer = setInterval(() => (state.t >= state.n - 1 ? stop() : setMonth(state.t + 1)), 350);
   };
 
-  // climate variable picker
-  const sel = $('#climate-var');
-  sel.innerHTML = Object.entries(state.meta.vars).map(([k, v]) => `<option value="${k}">${esc(v.label)} (${esc(v.units)})</option>`).join('');
-  sel.value = state.climateVar;
-  sel.addEventListener('change', async () => {
-    state.climateVar = sel.value;
+  // climate pickers: Temperature and Precipitation (top), Other climate (Advanced). They share one map fill,
+  // so turning one on, or picking in it, turns the others off.
+  const vars = state.meta.vars;
+  const elsewhere = new Set([...Object.values(CLIMATE_GROUPS).flatMap((c) => Object.keys(c.vars || {})), ...SOIL_MOISTURE]);
+  for (const [g, c] of Object.entries(CLIMATE_GROUPS)) {
+    const opts = c.vars
+      ? Object.entries(c.vars).filter(([k]) => vars[k])
+      : Object.keys(vars).filter((k) => !elsewhere.has(k)).map((k) => [k, `${vars[k].label} (${vars[k].units})`]);
+    $('#' + c.pick).innerHTML = opts.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('');
+    if (!vars[state.groupVar[g]]) state.groupVar[g] = opts[0]?.[0] ?? null;
+  }
+  // ?v= link: open on that variable (old links may name a soil-moisture variable, now in the Soil layer)
+  const qg = !qv ? null : SOIL_MOISTURE.includes(qv) ? 'soil'
+    : Object.keys(CLIMATE_GROUPS).find((g) => $('#' + CLIMATE_GROUPS[g].pick).querySelector(`option[value="${qv}"]`)) || null;
+  if (qg === 'soil') { state.soilVar = qv; $('#lyr-soil').checked = true; } else if (qg) state.groupVar[qg] = qv;
+  for (const [g, c] of Object.entries(CLIMATE_GROUPS)) {
+    $('#' + c.pick).value = state.groupVar[g];
+    $('#' + c.layer).checked = qg && qg !== 'soil' ? g === qg : g === 'temp';
+  }
+  state.climateVar = state.groupVar[activeGroup() ?? 'temp'];
+  const activate = async (g) => {
+    for (const [n, c] of Object.entries(CLIMATE_GROUPS)) $('#' + c.layer).checked = n === g;
+    state.climateVar = state.groupVar[g];
     const url = new URL(location.href);
-    url.searchParams.set('v', sel.value);
+    url.searchParams.set('v', state.climateVar);
     history.replaceState(null, '', url);
-    await loadVar(sel.value);
+    applyLayers();
+    await loadVar(state.climateVar);
     paintClimate();
+  };
+  for (const [g, c] of Object.entries(CLIMATE_GROUPS)) {
+    $('#' + c.layer).addEventListener('change', (e) => (e.target.checked ? activate(g) : applyLayers()));
+    $('#' + c.pick).addEventListener('change', (e) => { state.groupVar[g] = e.target.value; activate(g); });
+  }
+  // one "difference from normal" switch for every monthly variable (climate pickers and soil moisture)
+  $('#climate-anom').addEventListener('change', (e) => {
+    state.climateMode = e.target.checked ? 'anom' : 'value';
+    paintClimate();
+    if ($('#lyr-soil').checked) paintSoil();
   });
-  $('#climate-mode').addEventListener('change', (e) => { state.climateMode = e.target.value; paintClimate(); });
 
-  // soil picker
+  // soil picker: monthly soil moisture (NASA POWER) and the fixed soil-survey properties, in one list
   const ss = $('#soil-var');
-  ss.innerHTML = Object.entries(state.eco.soil_fields).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+  const moist = SOIL_MOISTURE.filter((k) => vars[k]);
+  ss.innerHTML = (moist.length ? `<optgroup label="Soil moisture (monthly)">${moist.map((k) =>
+    `<option value="${k}">${esc(vars[k].label)} (${esc(vars[k].units)})</option>`).join('')}</optgroup>` : '') +
+    `<optgroup label="Soil properties">${Object.entries(state.eco.soil_fields).map(([k, v]) =>
+      `<option value="${k}">${esc(v)}</option>`).join('')}</optgroup>`;
   ss.value = state.soilVar;
   ss.addEventListener('change', () => { state.soilVar = ss.value; paintSoil(); });
+
+  // "Advanced": every layer but Temperature and Precipitation, collapsed unless the link turned one on
+  const adv = $('#adv-toggle');
+  const setAdv = (open) => { adv.setAttribute('aria-expanded', open); $('#adv').hidden = !open; };
+  adv.addEventListener('click', () => setAdv(adv.getAttribute('aria-expanded') !== 'true'));
+  if (qg === 'other' || qg === 'soil') {
+    setAdv(true);
+    const b = document.querySelector(`.expand[aria-controls="${qg}-opts"]`);
+    b.setAttribute('aria-expanded', true);
+    $(`#${qg}-opts`).hidden = false;
+  }
 
   // crop legend
   $('#crop-legend').innerHTML = Object.values(CROP_GROUPS).map(([n, c]) => `<span><i class="sw" style="background:${c}"></i>${esc(n)}</span>`).join('');
@@ -1737,7 +1938,7 @@ function buildUI() {
   const il = $('#irrigation-labels-on');
   if (il) il.addEventListener('change', () => { state.irrigationLabels = il.checked; applyLayers(); });
 
-  for (const id of ['lyr-climate', 'lyr-soil', 'lyr-crops', 'lyr-yield', 'lyr-seeded', 'lyr-finance', 'lyr-irrigation', 'lyr-lines']) {
+  for (const id of ['lyr-soil', 'lyr-crops', 'lyr-yield', 'lyr-seeded', 'lyr-finance', 'lyr-irrigation', 'lyr-lines']) {
     $('#' + id).addEventListener('change', () => { applyLayers(); if (id === 'lyr-crops') paintCrops(); if (id === 'lyr-yield') renderSim(); });
   }
   syncLegends();

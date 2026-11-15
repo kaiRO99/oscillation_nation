@@ -67,7 +67,7 @@ const state = {
   meta: null, eco: null, ids: [], rowOf: {}, bins: {}, normals: {}, domains: {},
   oni: [], enso: [], oniFc: [], classes: {},
   nObs: 0, nowT: null, kinds: [], // months < nObs are NASA POWER; later ones come from Meteomatics
-  simMeta: null, simCache: {}, sel: null, matches: [], hover: null,
+  simMeta: null, simCache: {}, sel: null, matches: [], hover: null, activeMatch: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -1341,6 +1341,7 @@ async function selectDistrict(id, { fly = true } = {}) {
   if (!state.eco.d[id]) return;
   if (state.sel != null && mapReady()) map.setFeatureState({ source: 'ed', id: state.sel }, { sel: false });
   state.sel = id;
+  state.activeMatch = null;
   $('#sim').classList.remove('collapsed');
   $('#sim-search').value = `${id} · ${districtName(id)}`;
   if (mapReady()) map.setFeatureState({ source: 'ed', id }, { sel: true });
@@ -1370,6 +1371,15 @@ function simMatches(id, t) {
     out.push({ rank: i + 1, id: pool[idx], t: (y0 + yOff - state.y0) * 12 + (t % 12), score });
   }
   return out;
+}
+
+// comparison report for your district in month t vs a match in its month
+const tYM = (t) => `${tYear(t)}-${String((t % 12) + 1).padStart(2, '0')}`;
+function reportUrl(a, ta, b, tb) {
+  const q = new URLSearchParams({ a, ta: tYM(ta), b, tb: tYM(tb) });
+  if (state.enso[ta]) q.set('pa', state.enso[ta]);
+  if (state.enso[tb]) q.set('pb', state.enso[tb]);
+  return `report.html?${q}`;
 }
 
 function snapshot(id, t) {
@@ -1428,11 +1438,13 @@ function renderSim() {
     : `<h2>Most similar ${MONTHS[state.t % 12]}s</h2>`;
   res.innerHTML = `${head}<ol class="matches">` + state.matches.map((m) => {
     const q = snapshot(m.id, m.t);
-    return `<li data-id="${m.id}" data-t="${m.t}">
+    const active = state.activeMatch === `${m.id}:${m.t}`;
+    return `<li data-id="${m.id}" data-t="${m.t}"${active ? ' class="active"' : ''}>
       <div class="m-top"><span class="rank">${m.rank}</span><b>${tLabel(m.t)}</b> ${ensoChip(m.t)}<span class="score">${m.score}</span></div>
       <div class="bar"><i style="width:${m.score}%"></i></div>
       <div class="muted">Ecodistrict ${m.id} · ${esc(districtName(m.id))}</div>
       <div class="m-vals">${fmt(q.temp)} °C · ${fmt(q.precip, 0)} mm · wetness ${fmt(q.wet, 2)}</div>
+      <a class="report-link" href="${reportUrl(id, state.t, m.id, m.t)}" target="_blank" rel="noopener">Generate report ↗</a>
     </li>`;
   }).join('') + '</ol>';
 }
@@ -1595,12 +1607,18 @@ function buildUI() {
   $('#sim-search').addEventListener('focus', (e) => e.target.select());
 
   const results = $('#sim-results');
+  // click a match: zoom to it and select it, which reveals its "Generate report" link
   results.addEventListener('click', (e) => {
     const li = e.target.closest('li[data-id]');
-    if (li) map.flyTo({ center: state.eco.d[li.dataset.id].lp, zoom: Math.max(map.getZoom(), 5.5) });
+    if (!li || e.target.closest('.report-link')) return;
+    map.flyTo({ center: state.eco.d[li.dataset.id].lp, zoom: Math.max(map.getZoom(), 5.5) });
+    state.activeMatch = `${li.dataset.id}:${li.dataset.t}`;
+    results.querySelectorAll('li.active').forEach((x) => x.classList.remove('active'));
+    li.classList.add('active');
   });
   results.addEventListener('dblclick', (e) => {
     const li = e.target.closest('li[data-id]');
+    if (e.target.closest('.report-link')) return;
     if (li) setMonth(Number(li.dataset.t));
   });
   results.addEventListener('mouseover', (e) => {

@@ -6,7 +6,7 @@
 <title>Oscillation Nation · El Niño and Canadian farmland</title>
 <link href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css" rel="stylesheet">
 <!-- Porkbun caches .css/.js for 30 days: bump ?v= on every deploy that changes them -->
-<link href="style.css?v=14" rel="stylesheet">
+<link href="style.css?v=17" rel="stylesheet">
 </head>
 <body>
 <div id="map"></div>
@@ -26,7 +26,23 @@
       <svg id="oni-chart" viewBox="0 0 300 70" preserveAspectRatio="none" role="img" aria-label="Oceanic Niño Index by month"></svg>
       <div id="enso-strip" aria-hidden="true"></div>
       <input id="month" type="range" min="0" max="0" step="1" value="0" aria-label="Month">
-      <div class="ticks"><span id="tmin"></span><span id="tmax"></span></div>
+      <div class="ticks"><span id="tmin"></span><span id="thover" class="hover-label"></span><span id="tmax"></span></div>
+
+      <div class="step-row">
+        <button class="step" data-step="-12" title="Back one year (Shift + ←)" aria-label="Back one year">«</button>
+        <button class="step" data-step="-1" title="Back one month (←)" aria-label="Back one month">‹</button>
+        <select id="pick-month" aria-label="Month"></select>
+        <select id="pick-year" aria-label="Year"></select>
+        <button class="step" data-step="1" title="Forward one month (→)" aria-label="Forward one month">›</button>
+        <button class="step" data-step="12" title="Forward one year (Shift + →)" aria-label="Forward one year">»</button>
+        <button id="go-now" class="step wide" title="Jump to this month">Now</button>
+      </div>
+
+      <div class="zoom">
+        <svg id="oni-zoom" viewBox="0 0 360 34" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <input id="month-fine" type="range" min="0" max="35" step="1" value="0" aria-label="Month (zoomed to 3 years)">
+        <div class="ticks"><span id="zmin"></span><span class="muted">zoomed · 3 years</span><span id="zmax"></span></div>
+      </div>
       <div class="legend-row">
         <span><i class="sw nino"></i>El Niño</span><span><i class="sw neutral"></i>Neutral</span><span><i class="sw nina"></i>La Niña</span>
       </div>
@@ -66,6 +82,19 @@
       </div>
 
       <div class="layer">
+        <label class="check"><input id="lyr-yield" type="checkbox"> <b>Crop yield</b></label>
+        <div class="opts" data-for="lyr-yield">
+          <select id="yield-crop" aria-label="Crop"></select>
+          <select id="yield-mode" aria-label="Show">
+            <option value="value">Yield (kg/ha)</option>
+            <option value="anom">Difference from average</option>
+          </select>
+          <div class="ramp" id="yield-ramp"></div>
+          <p class="small" id="yield-text"></p>
+        </div>
+      </div>
+
+      <div class="layer">
         <label class="check"><input id="lyr-lines" type="checkbox" checked> <b>Ecodistrict boundaries</b></label>
       </div>
     </section>
@@ -73,7 +102,7 @@
     <p class="src">
       Ecodistricts: AAFC National Ecological Framework v2.2.
       Soil: AAFC <a href="https://sis.agr.gc.ca/cansis/nsdb/slc/v3.2/index.html" target="_blank" rel="noopener">Soil Landscapes of Canada v3.2</a>.
-      Crops: <a href="https://agriculture.canada.ca/imagery-images/rest/services/annual_crop_inventory" target="_blank" rel="noopener">AAFC Annual Crop Inventory</a>.
+      Crops: <a href="https://agriculture.canada.ca/imagery-images/rest/services/annual_crop_inventory" target="_blank" rel="noopener">AAFC Annual Crop Inventory</a>; yields: AAFC historical estimated crop yield by Soil Landscape polygon.
       All under the <a href="https://open.canada.ca/en/open-government-licence-canada" target="_blank" rel="noopener">Open Government Licence – Canada</a>.
       Climate: <a href="https://power.larc.nasa.gov/" target="_blank" rel="noopener">NASA POWER</a>; recent months and the
       seasonal forecast (ECMWF) from <a href="https://www.meteomatics.com/" target="_blank" rel="noopener">Meteomatics</a>.
@@ -108,6 +137,6 @@
 <div id="tip" hidden></div>
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-<script src="app.js?v=14"></script>
+<script src="app.js?v=17"></script>
 </body>
 </html>

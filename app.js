@@ -50,6 +50,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const state = {
   t: 0, y0: 1981, n: 0,
   climateVar: 'T2M', climateMode: 'value', soilVar: 'awhc',
+  yieldCrop: 'WHTSPG', yieldMode: 'value', yield: null, yieldIdx: {}, yieldMeans: {}, yieldDomains: {},
   meta: null, eco: null, ids: [], rowOf: {}, bins: {}, normals: {}, domains: {},
   oni: [], enso: [], oniFc: [], classes: {},
   nObs: 0, nowT: null, kinds: [], // months < nObs are NASA POWER; later ones come from Meteomatics
@@ -85,14 +86,22 @@ const dataReady = Promise.all([
   getJSON('data/aci_classes.json'),
   getJSON('data/similarity/meta.json').catch(() => null),
   getJSON('data/oni_forecast.json').catch(() => null),
+  getJSON('data/yield.json').catch(() => null),
 ]);
 
 const monthIndex = (ym, y0) => (Number(ym.slice(0, 4)) - y0) * 12 + Number(ym.slice(5, 7)) - 1;
 
-const uiReady = dataReady.then(async ([oni, eco, meta, aci, simMeta, oniFc]) => {
+const uiReady = dataReady.then(async ([oni, eco, meta, aci, simMeta, oniFc, yieldData]) => {
   state.eco = eco;
   state.meta = meta;
   state.simMeta = simMeta;
+  state.yield = yieldData;
+  if (yieldData) {
+    yieldData.crops.forEach(([code], i) => { state.yieldIdx[code] = i; });
+    if (!(state.yieldCrop in state.yieldIdx)) state.yieldCrop = yieldData.crops[0][0];
+    const first = yieldData.d[Object.keys(yieldData.d)[0]];
+    yieldData.y1 = yieldData.y0 + (first ? first[0].length - 1 : 0);
+  }
   state.classes = aci.classes;
   state.ids = meta.ids;
   meta.ids.forEach((id, i) => { state.rowOf[id] = i; });
@@ -136,6 +145,8 @@ map.on('load', async () => {
     paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0.8 } }, firstLabel);
   map.addLayer({ id: 'climate-fill', type: 'fill', source: 'ed',
     paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0.72 } }, firstLabel);
+  map.addLayer({ id: 'yield-fill', type: 'fill', source: 'ed', layout: { visibility: 'none' },
+    paint: { 'fill-color': 'rgba(0,0,0,0)', 'fill-opacity': 0.78 } }, firstLabel);
   map.addLayer({ id: 'hit', type: 'fill', source: 'ed', paint: { 'fill-color': '#000', 'fill-opacity': 0 } }, firstLabel);
   map.addLayer({ id: 'lines', type: 'line', source: 'ed',
     paint: { 'line-color': '#34413a', 'line-width': ['interpolate', ['linear'], ['zoom'], 3, 0.2, 8, 1], 'line-opacity': 0.45 } }, firstLabel);
@@ -264,10 +275,111 @@ function drawOni() {
   $('#enso-strip').style.background = `${veil}linear-gradient(90deg, ${stops.join(', ')})`;
 }
 
+// ---- precise time controls: steppers, pickers, a zoomed 3-year slider, keyboard, chart drag
+const ZW = 36; // months in the zoom window
+
+function syncTimeControls(fromFine = false) {
+  const t = state.t;
+  $('#pick-month').value = t % 12;
+  $('#pick-year').value = tYear(t);
+  const fine = $('#month-fine');
+  if (!fine) return;
+  const n = state.n, w = Math.min(ZW, n);
+  // re-centre the window unless the user is dragging the zoomed slider itself
+  if (!fromFine && (state.z0 == null || t < state.z0 + 3 || t > state.z0 + w - 4)) {
+    state.z0 = Math.max(0, Math.min(n - w, t - Math.floor(w / 2)));
+  }
+  const z0 = state.z0;
+  fine.min = z0;
+  fine.max = z0 + w - 1;
+  fine.value = t;
+  $('#zmin').textContent = tLabel(z0);
+  $('#zmax').textContent = tLabel(z0 + w - 1);
+  drawZoom();
+}
+
+function drawZoom() {
+  const svg = $('#oni-zoom');
+  const W = 360, H = 34, mid = H / 2, w = Math.min(ZW, state.n), bw = W / w, z0 = state.z0;
+  const vals = state.oni.slice(z0, z0 + w).filter((v) => v != null).map(Math.abs);
+  const sc = (mid - 2) / Math.max(1.5, ...vals);
+  let s = '';
+  for (let i = 0; i < w; i++) {
+    const t = z0 + i, v = state.oni[t];
+    if (t % 12 === 0 && i > 0) s += `<line x1="${i * bw}" x2="${i * bw}" y1="0" y2="${H}" class="yr"/>`;
+    if (v == null) continue;
+    const h = v * sc;
+    s += `<rect x="${(i * bw + 0.6).toFixed(2)}" width="${(bw - 1.2).toFixed(2)}" y="${(h >= 0 ? mid - h : mid).toFixed(2)}" ` +
+      `height="${Math.max(0.6, Math.abs(h)).toFixed(2)}" fill="${ENSO[state.enso[t]].color}"${state.oniFc[t] ? ' fill-opacity="0.45"' : ''}/>`;
+  }
+  const i = state.t - z0;
+  s += `<line x1="0" x2="${W}" y1="${mid}" y2="${mid}" class="zero"/>` +
+    `<rect x="${(i * bw).toFixed(2)}" width="${bw.toFixed(2)}" y="0.5" height="${H - 1}" class="cur"/>`;
+  svg.innerHTML = s;
+}
+
+function hoverLabel(t) {
+  const v = state.oni[t];
+  return t == null ? '' : `${tLabel(t)}${v == null ? '' : ` · ONI ${signed(v, 2)}`}${isFuture(t) ? ' (forecast)' : ''}`;
+}
+
+function buildTimeControls() {
+  $('#pick-month').innerHTML = MONTHS.map((m, i) => `<option value="${i}">${m}</option>`).join('');
+  const y1 = tYear(state.n - 1);
+  let yo = '';
+  for (let y = state.y0; y <= y1; y++) yo += `<option value="${y}">${y}</option>`;
+  $('#pick-year').innerHTML = yo;
+  const pick = () => setMonth((Number($('#pick-year').value) - state.y0) * 12 + Number($('#pick-month').value));
+  $('#pick-month').addEventListener('change', pick);
+  $('#pick-year').addEventListener('change', pick);
+  for (const b of document.querySelectorAll('.step[data-step]')) {
+    b.addEventListener('click', () => setMonth(state.t + Number(b.dataset.step)));
+  }
+  $('#go-now').addEventListener('click', () => setMonth(state.nowT ?? state.n - 1));
+  $('#go-now').hidden = state.nowT == null;
+
+  const fine = $('#month-fine');
+  fine.addEventListener('input', () => { setMonthFrom(Number(fine.value), true); });
+  fine.addEventListener('change', () => syncTimeControls()); // re-centre once the drag ends
+
+  // drag / hover on both ONI charts
+  const scrub = (el, toT) => {
+    let down = false;
+    const at = (e) => toT(e, el.getBoundingClientRect());
+    el.addEventListener('pointerdown', (e) => { down = true; el.setPointerCapture(e.pointerId); setMonthFrom(at(e), el.id === 'oni-zoom'); });
+    el.addEventListener('pointermove', (e) => {
+      const t = clampT(at(e));
+      $('#thover').textContent = hoverLabel(t);
+      if (down) setMonthFrom(t, el.id === 'oni-zoom');
+    });
+    el.addEventListener('pointerup', () => { down = false; if (el.id === 'oni-zoom') syncTimeControls(); });
+    el.addEventListener('pointerleave', () => { if (!down) $('#thover').textContent = ''; });
+  };
+  scrub($('#oni-chart'), (e, b) => Math.floor((e.clientX - b.left) / b.width * state.n));
+  scrub($('#oni-zoom'), (e, b) => state.z0 + Math.floor((e.clientX - b.left) / b.width * Math.min(ZW, state.n)));
+
+  // keyboard: arrows step a month, Shift + arrows a year (when not typing in a field)
+  document.addEventListener('keydown', (e) => {
+    if (e.target.closest('input, select, textarea') || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      setMonth(state.t + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 12 : 1));
+    }
+  });
+}
+
+// setMonth, telling the zoom window not to re-centre while it is being dragged
+function setMonthFrom(t, fromFine) {
+  state.fromFine = fromFine;
+  setMonth(t);
+  state.fromFine = false;
+}
+
 function setMonth(t) {
   state.t = clampT(t);
   const slider = $('#month');
   slider.value = state.t;
+  syncTimeControls(state.fromFine);
   $('#month-label').innerHTML = esc(tLabel(state.t)) + (isFuture(state.t) ? ' <span class="fc-tag">forecast</span>' : '');
   const ph = state.enso[state.t], v = state.oni[state.t], fc = state.oniFc[state.t];
   const badge = $('#enso-badge');
@@ -278,7 +390,7 @@ function setMonth(t) {
     ? `<b>Forecast</b> ONI for the ${ONI_SEASONS[state.t % 12]} season centred on ${tLabel(state.t)}, from the ECMWF seasonal ` +
       'forecast of Niño 3.4 sea temperature (via Meteomatics), anchored to NOAA\'s latest observation. '
     : `ONI for the ${ONI_SEASONS[state.t % 12]} season centred on ${tLabel(state.t)}. `) +
-    'Coloured as an El Niño / La Niña episode when it stays beyond ±0.5 °C for 5+ overlapping seasons; the shaded end is forecast. Click the chart to jump.';
+    'Coloured as an El Niño / La Niña episode when it stays beyond ±0.5 °C for 5+ overlapping seasons; the shaded end is forecast. Click or drag the chart, use the arrows, or the zoomed slider for single months.';
   const sel = $('#oni-sel');
   if (sel) {
     const x = (state.t + 0.5) * 300 / state.n;
@@ -389,6 +501,7 @@ const mapReady = () => map.getSource('ed') && map.isSourceLoaded('ed');
 function paintAll() {
   paintClimate();
   paintCrops();
+  paintYield();
 }
 
 function paintClimate() {
@@ -468,14 +581,97 @@ function paintCrops() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Crop yield (per ecodistrict and year; compared with each district's own average)
+// ---------------------------------------------------------------------------
+// year with yield data that goes with the slider month (clamped to the record)
+function yieldYear() {
+  const y = state.yield;
+  return y ? Math.max(y.y0, Math.min(y.y1, tYear(state.t))) : null;
+}
+
+// crop series for one ecodistrict, or null
+function yieldSeries(id, code = state.yieldCrop) {
+  const rows = state.yield?.d[id];
+  const i = state.yieldIdx[code];
+  return rows && i != null ? rows[i] : null;
+}
+
+// each ecodistrict's long-term mean yield for a crop (the "average" we compare years against)
+function yieldMean(id, code) {
+  const key = `${id}.${code}`;
+  if (key in state.yieldMeans) return state.yieldMeans[key];
+  const s = yieldSeries(id, code);
+  let sum = 0, c = 0;
+  if (s) for (const v of s) if (v != null) { sum += v; c++; }
+  return (state.yieldMeans[key] = c ? sum / c : null);
+}
+
+// value for a year: raw kg/ha, or the % above/below that district's average
+function yieldValue(id, year, code = state.yieldCrop, mode = state.yieldMode) {
+  const s = yieldSeries(id, code);
+  if (!s) return null;
+  const v = s[year - state.yield.y0];
+  if (v == null || mode === 'value') return v;
+  const m = yieldMean(id, code);
+  return m ? (v - m) / m * 100 : null;
+}
+
+// colour range for the picked crop + mode, over every ecodistrict and year, cached
+function yieldDomain(code, mode) {
+  const key = `${code}.${mode}`;
+  if (state.yieldDomains[key]) return state.yieldDomains[key];
+  const vals = [];
+  for (const id of Object.keys(state.yield.d)) {
+    for (let year = state.yield.y0; year <= state.yield.y1; year++) {
+      const v = yieldValue(id, year, code, mode);
+      if (v != null) vals.push(v);
+    }
+  }
+  let dom = [0, 1];
+  if (vals.length) {
+    dom = mode === 'anom'
+      ? (() => { const m = Math.max(1, quantile(vals.map(Math.abs), 0.97)); return [-m, m]; })()
+      : [quantile(vals, 0.02), quantile(vals, 0.98)];
+  }
+  return (state.yieldDomains[key] = dom);
+}
+
+function paintYield() {
+  if (!state.yield) { $('#yield-text').textContent = 'No yield data yet (run scripts/build_yield.py).'; return; }
+  const code = state.yieldCrop, mode = state.yieldMode;
+  const label = state.yield.crops[state.yieldIdx[code]][1];
+  const year = yieldYear();
+  const exact = year === tYear(state.t);
+  const dom = yieldDomain(code, mode);
+  const colors = mode === 'anom' ? RAMPS.anomWet : RAMPS.awhc;
+  $('#yield-ramp').innerHTML = mode === 'anom'
+    ? `<span>${signed(dom[0], 0)}%</span><i style="background:linear-gradient(90deg,${colors.join(',')})"></i><span>${signed(dom[1], 0)}% vs avg</span>`
+    : `<span>${fmt(dom[0], 0)}</span><i style="background:linear-gradient(90deg,${colors.join(',')})"></i><span>${fmt(dom[1], 0)} kg/ha</span>`;
+  $('#yield-text').innerHTML = `<b>${esc(label)}</b> yield for <b>${year}</b>` +
+    `${exact ? '' : ` (nearest year to ${tYear(state.t)}; record is ${state.yield.y0}–${state.yield.y1})`}, ` +
+    (mode === 'anom'
+      ? 'shown as % above (teal) or below (brown) each ecodistrict’s own long-term average.'
+      : 'averaged across the Soil Landscape polygons in each ecodistrict.');
+  if (!mapReady() || !map.getLayer('yield-fill') || !$('#lyr-yield').checked) return;
+  map.setPaintProperty('yield-fill', 'fill-color', rampExpr('y', colors, dom));
+  for (const id of state.ids) {
+    map.setFeatureState({ source: 'ed', id }, { y: yieldValue(id, year) });
+  }
+}
+
 function applyLayers() {
+  for (const el of document.querySelectorAll('.opts')) el.hidden = !$('#' + el.dataset.for).checked;
+  if ($('#lyr-yield').checked) paintYield(); // legend + text even before the map is ready
   if (!map.getLayer('climate-fill')) return;
   const vis = (id, on) => map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
   vis('climate-fill', $('#lyr-climate').checked);
   vis('soil-fill', $('#lyr-soil').checked);
+  vis('yield-fill', $('#lyr-yield').checked);
   vis('crops', $('#lyr-crops').checked);
   vis('lines', $('#lyr-lines').checked);
   if ($('#lyr-soil').checked) paintSoil();
+  if ($('#lyr-yield').checked) paintYield();
   for (const el of document.querySelectorAll('.opts')) el.hidden = !$('#' + el.dataset.for).checked;
 }
 
@@ -508,6 +704,16 @@ function showTip(id, pt) {
     if (c) {
       h += `<div>Cropland ${fmt(c.crop, 0)}% of land, pasture ${fmt(c.pasture, 0)}%</div>`;
       if (c.crop > 0) h += `<div>Top crop: <b>${esc(state.classes[c.top]?.[0] ?? '–')}</b> · ${esc(CROP_GROUPS[c.groups[0][0]][0])} ${fmt(c.groups[0][1], 0)}% of crops</div>`;
+    }
+  }
+  if ($('#lyr-yield').checked && state.yield) {
+    const year = yieldYear(), code = state.yieldCrop;
+    const label = state.yield.crops[state.yieldIdx[code]][1];
+    const raw = yieldValue(id, year, code, 'value');
+    if (raw != null) {
+      const pct = yieldValue(id, year, code, 'anom');
+      h += `<div>${esc(label)} yield ${year}: <b>${fmt(raw, 0)}</b> kg/ha` +
+        (pct == null ? '' : ` <span class="muted">(${signed(pct, 0)}% vs avg)</span>`) + '</div>';
     }
   }
   const m = state.matches.find((x) => x.id === id);
@@ -638,10 +844,7 @@ function buildUI() {
   slider.addEventListener('input', () => setMonth(Number(slider.value)));
   drawOni();
 
-  $('#oni-chart').addEventListener('click', (e) => {
-    const b = e.currentTarget.getBoundingClientRect();
-    setMonth(Math.floor((e.clientX - b.left) / b.width * state.n));
-  });
+  buildTimeControls();
 
   // play
   let timer = null;
@@ -677,7 +880,16 @@ function buildUI() {
   // crop legend
   $('#crop-legend').innerHTML = Object.values(CROP_GROUPS).map(([n, c]) => `<span><i class="sw" style="background:${c}"></i>${esc(n)}</span>`).join('');
 
-  for (const id of ['lyr-climate', 'lyr-soil', 'lyr-crops', 'lyr-lines']) {
+  // crop-yield pickers
+  const yc = $('#yield-crop');
+  if (state.yield) {
+    yc.innerHTML = state.yield.crops.map(([code, label]) => `<option value="${code}">${esc(label)}</option>`).join('');
+    yc.value = state.yieldCrop;
+  }
+  yc.addEventListener('change', () => { state.yieldCrop = yc.value; paintYield(); });
+  $('#yield-mode').addEventListener('change', (e) => { state.yieldMode = e.target.value; paintYield(); });
+
+  for (const id of ['lyr-climate', 'lyr-soil', 'lyr-crops', 'lyr-yield', 'lyr-lines']) {
     $('#' + id).addEventListener('change', () => { applyLayers(); if (id === 'lyr-crops') paintCrops(); });
   }
   for (const el of document.querySelectorAll('.opts')) el.hidden = !$('#' + el.dataset.for).checked;

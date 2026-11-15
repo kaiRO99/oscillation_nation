@@ -44,7 +44,7 @@ select, input[type=text], input:not([type]) {
 }
 
 /* ---------- timeline ---------- */
-.time-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.time-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-bottom: 6px; }
 #play { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--accent); color: #fff; font-size: 13px; flex: none; }
 #play.on { background: #1d2420; }
 #month-label { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; white-space: nowrap; }
@@ -118,3 +118,18 @@ input[type=checkbox] { accent-color: var(--accent); margin: 0; }
   padding: 1px 5px; border-radius: 3px; background: #333; color: #fff; vertical-align: 2px; }
 .badge.fc { background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.18) 0 4px, transparent 4px 8px); }
 .note { margin: 6px 0 0; padding: 6px 8px; background: #f3f1ea; border-radius: 4px; }
+
+/* precise time controls */
+.hover-label { color: var(--ink, #1d2420); font-weight: 600; }
+.step-row { display: flex; align-items: center; gap: 4px; margin: 8px 0 4px; }
+.step-row select { flex: 1 1 auto; min-width: 0; padding: 3px 4px; font: inherit; font-size: 12.5px; }
+.step { flex: none; min-width: 26px; height: 26px; padding: 0 6px; border: 1px solid #cfcabd; border-radius: 5px;
+  background: #fff; font: inherit; font-size: 14px; line-height: 1; cursor: pointer; color: #1d2420; }
+.step:hover { background: #f1efe8; }
+.step.wide { font-size: 12px; font-weight: 600; }
+.zoom { margin: 4px 0 2px; padding: 6px 6px 2px; background: #f6f5f0; border-radius: 6px; }
+#oni-zoom { width: 100%; height: 34px; display: block; cursor: pointer; }
+#oni-zoom .yr { stroke: #9a978c; stroke-width: .6; vector-effect: non-scaling-stroke; }
+#oni-zoom .zero { stroke: #7d8a82; stroke-width: .6; vector-effect: non-scaling-stroke; }
+#oni-zoom .cur { fill: none; stroke: #111; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+#month-fine { width: 100%; accent-color: #1d2420; margin: 2px 0 0; }

@@ -113,7 +113,7 @@ const map = new maplibregl.Map({
   maxZoom: 12,
   attributionControl: {
     compact: true,
-    customAttribution: 'Ecodistricts, soil & crops © AAFC (OGL-Canada) · Climate: NASA POWER, Meteomatics · ONI © NOAA CPC',
+      customAttribution: 'Ecodistricts, soil & crops © AAFC (OGL-Canada) · Climate: NASA POWER, Meteomatics · ONI © NOAA CPC · Built with help from AI tools, verify key figures against the original sources',
   },
 });
 map.addControl(new maplibregl.NavigationControl(), 'bottom-right');

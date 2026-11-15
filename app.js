@@ -193,7 +193,7 @@ map.on('load', async () => {
       'fill-opacity': ['interpolate', ['linear'], ['coalesce', fs('yg'), 1], 0, 0.12, 0.05, 0.78] } }, firstLabel);
   map.addLayer({ id: 'hit', type: 'fill', source: 'ed', paint: { 'fill-color': '#000', 'fill-opacity': 0 } }, firstLabel);
   map.addLayer({ id: 'lines', type: 'line', source: 'ed',
-    paint: { 'line-color': '#34413a', 'line-width': ['interpolate', ['linear'], ['zoom'], 3, 0.2, 8, 1], 'line-opacity': 0.45 } }, firstLabel);
+    paint: { 'line-color': '#eef3f4', 'line-width': ['interpolate', ['linear'], ['zoom'], 3, 0.2, 8, 1], 'line-opacity': 0.8 } }, firstLabel);
   map.addLayer({ id: 'match-fill', type: 'fill', source: 'ed',
     paint: { 'fill-color': '#ff8a00', 'fill-opacity': ['case', isNum('match'), 0.55, 0] } }, firstLabel);
   map.addLayer({ id: 'match-line', type: 'line', source: 'ed',

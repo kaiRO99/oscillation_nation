@@ -1,8 +1,8 @@
 """Daily NASA POWER weather for farmland ecodistricts, reduced to monthly crop-stress indices.
 
 Usage:  python pipeline/fetch_power_daily.py [--start 1981] [--split 2025] [--workers 4]
-Reads   client/data/ecodistricts.min.geojson   polygons (sample points, as fetch_power.py: <= 4 on a 0.5 deg grid)
-        client/data/ecodistricts.json          which ecodistricts are farmland (have an AAFC crop inventory record)
+Reads   data/ecodistricts.min.geojson          polygons (sample points, as fetch_power.py: <= 4 on a 0.5 deg grid)
+        data/ecodistricts.json                 which ecodistricts are farmland (have an AAFC crop inventory record)
 Writes  data/raw/power_daily_indices.npz       per ecodistrict and month (float32, NaN = missing):
           KDD26..KDD33  heat degree-days above 26..33 C (single-sine daily temperature curve between Tmin and
                   Tmax). Several thresholds so a model can warm a past season exactly: degree-days above 30 C
@@ -39,7 +39,7 @@ import numpy as np
 from geo import sample_points
 
 ROOT = Path(__file__).resolve().parent.parent
-CDATA = ROOT / "client" / "data"
+CDATA = ROOT / "data"
 CACHE = ROOT / "data" / "raw" / "power_daily"
 OUT = ROOT / "data" / "raw" / "power_daily_indices.npz"
 POWER = "https://power.larc.nasa.gov/api/temporal/daily/point"

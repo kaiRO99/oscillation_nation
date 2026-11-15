@@ -6,15 +6,15 @@ Usage:  python pipeline/build_yield_forecast.py [--target 2027] [--compare]
 Reads   data/raw/sad_crops.zip                       StatCan 32-10-0002: OBSERVED yield + seeded area by Small
                                                      Area Data Region (SADR), 1976-2025 (build_seeded.py downloads it)
         data/raw/historicalEstimatedCropYieldSlc.csv only for the ecodistrict -> SADR crosswalk, per year
-        client/data/climate/*.bin + meta.json        NASA POWER monthly climate per ecodistrict (fetch_power.py), extended
+        data/climate/*.bin + meta.json               NASA POWER monthly climate per ecodistrict (fetch_power.py), extended
                                                      by fetch_forecast.py with ERA5 + the ECMWF seasonal forecast
         data/raw/power_daily_indices.npz             daily-weather indices per ecodistrict and month: heat degree-days,
                                                      dry spells, downpours, killing frost (fetch_power_daily.py)
-        client/data/ecodistricts.json                ecodistrict area and cropland share (climate weights)
-        client/data/oni.json, oni_forecast.json      ONI history and ECMWF's ONI forecast (sensitivity check only)
+        data/ecodistricts.json                       ecodistrict area and cropland share (climate weights)
+        data/oni.json, oni_forecast.json             ONI history and ECMWF's ONI forecast (sensitivity check only)
         data/raw/enso/RONI.ascii.txt                 NOAA CPC Relative Oceanic Nino Index history (auto-downloaded)
-        client/data/enso_forecast.json               CPC's RONI outlook for the coming seasons (hand-updated monthly)
-Writes  client/data/yield_forecast.json              see the "doc" dict at the end of main()
+        data/enso_forecast.json                      CPC's RONI outlook for the coming seasons (hand-updated monthly)
+Writes  data/yield_forecast.json                     see the "doc" dict at the end of main()
 
 Why observed regional yields: data/yield.json is AAFC's *modelled* yield, downscaled from these same
 regional statistics, so it adds no information below the region and would make a weather model partly
@@ -92,7 +92,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "raw"             # downloads / caches (git-ignored)
-CDATA = ROOT / "client" / "data"        # what the map loads
+CDATA = ROOT / "data"                   # what the map loads
 ZIP = RAW / "sad_crops.zip"
 SLC_NAME = "historicalEstimatedCropYieldSlc.csv"
 SLC = next((p for p in (RAW / SLC_NAME, ROOT / "data" / SLC_NAME) if p.exists()), RAW / SLC_NAME)
@@ -652,7 +652,7 @@ def stat_enso_forecast(roni, target):
 
 
 def ecmwf_enso_alternative(ctx):
-    """ECMWF's winter Nino 3.4 forecast (client/data/oni_forecast.json, from fetch_forecast.py) as an
+    """ECMWF's winter Nino 3.4 forecast (data/oni_forecast.json, from fetch_forecast.py) as an
     alternative to CPC's DJF median, for a sensitivity check. It is on the ONI scale, so it is moved to
     RONI with the mean ONI - RONI difference over the last 3 seasons both indices have. CPC's spread and
     its summer (JJA) forecast are kept: the ECMWF file has neither (ensemble mean, ends in spring).

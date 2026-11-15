@@ -1,16 +1,12 @@
 # Oscillation Nation: map layers and data pipeline
 
-Product overview: [client/README.md](../client/README.md). This file documents the map layers, the data
+Product overview: [README.md](../README.md). This file documents the map layers, the data
 pipeline and the data caveats.
 
-**Layout.** The web app and every file it loads live in `client/` (data in `client/data/`); the scripts that
+**Layout.** The web app and every file it loads live at the repo root (data in `data/`); the scripts that
 build them are in `pipeline/`; downloads and caches go in git-ignored `raw/` folders (`data/raw/` locally).
 
-> **Path note (after the `client/` + `pipeline/` move):** most pipeline scripts still use `ROOT / "data"`,
-> so they write to `data/` at the repo root while the app reads `client/data/`. Copy their outputs into
-> `client/data/` or update those paths before re-running them.
-
-## Map layers (client/)
+## Map layers
 
 - **Monthly El Niño timeline.** A slider over every month from Jan 1981 to Dec 2025, with the ONI chart and a strip underneath coloured by phase: red = El Niño, green = neutral, blue = La Niña. A month counts as El Niño / La Niña when it is part of a run of at least 5 overlapping seasons beyond ±0.5 °C (NOAA's definition).
 - **Datasets, each with its own checkbox** and all averaged per ecodistrict:
@@ -25,7 +21,7 @@ build them are in `pipeline/`; downloads and caches go in git-ignored `raw/` fol
 
 ### Factors already on the map
 
-Everything a user can currently see or select, grouped by map layer. This is the "already done" list — add new factors as new entries here (and as new layers/variables in `client/index.html`, `client/app.js`, and the data pipeline).
+Everything a user can currently see or select, grouped by map layer. This is the "already done" list — add new factors as new entries here (and as new layers/variables in `index.html`, `app.js`, and the data pipeline).
 
 **El Niño timeline** (always on, top-left panel)
 - [x] Oceanic Niño Index (ONI) value per month, Jan 1981 – Dec 2025
@@ -91,7 +87,7 @@ Where a yield is drawn (the source gives *every* Soil Landscape polygon a yield,
 - [x] Observed yield anomaly (`yield_pct`, % vs trend, from Census Agricultural Region yields)
 - [x] Dollar sensitivity per province (`sensitivity_m_per_yield_point`): $M of weather-program payments per percentage point of yield shortfall
 
-**Crop yield forecast** (part of `lyr-yield`; `client/yield-forecast.js`) — when the timeline reaches the
+**Crop yield forecast** (part of `lyr-yield`; `yield-forecast.js`) — when the timeline reaches the
 forecast season (2027; Jan–May 2027 are the forecast months on the slider), the Crop yield layer shows next
 season's forecast, tagged *forecast* like the climate forecast. One figure per Census Agricultural Region,
 for the 12 crops with observed regional yields. Method and accuracy: *Yield forecast* below.
@@ -106,8 +102,7 @@ for the 12 crops with observed regional yields. Method and accuracy: *Yield fore
 
 ### Data pipeline
 
-The app loads `client/data/`; downloads and caches go to `data/raw/` (git-ignored). Most scripts still write to
-`data/` (see the path note above); `build_yield_forecast.py` reads and writes `client/data/`. Run in this order:
+The app loads `data/`; downloads and caches go to `data/raw/` (git-ignored). Run in this order:
 
 ```bash
 python pipeline/fetch_data.py            # ONI + crop class table
@@ -120,7 +115,7 @@ python pipeline/build_client_data.py     # merges boundaries, soil and crops -> 
 python pipeline/build_yield.py           # SLC crop-yield CSV -> data/yield.json (per ecodistrict/year/crop; needs numpy)
 python pipeline/build_seeded.py          # StatCan seeded area by region + province -> data/seeded.json (downloads both tables)
 python pipeline/fetch_power_daily.py     # daily NASA POWER for farmland ecodistricts -> data/raw/power_daily_indices.npz (heat degree-days, dry spells, downpours, frost; ~20 min first time at the default 60 requests/min, then only the current year)
-python pipeline/build_yield_forecast.py  # next-season yield forecast -> client/data/yield_forecast.json (needs numpy; ~1 min; run after fetch_forecast.py; --compare re-scores model forms)
+python pipeline/build_yield_forecast.py  # next-season yield forecast -> data/yield_forecast.json (needs numpy; ~1 min; run after fetch_forecast.py; --compare re-scores model forms)
 python pipeline/evaluate_yield_forecast.py  # walk-forward accuracy test of that forecast (~1 min)
 python pipeline/similarity.py            # precomputed matches -> data/similarity/<id>.bin (needs numpy)
 python pipeline/build_finance.py         # payments + yields + weather -> data/finance.json
@@ -130,20 +125,20 @@ python pipeline/build_irrigation.py      # StatCan irrigation volume by province
 
 | File sent to the browser | What it holds |
 | --- | --- |
-| `client/data/ecodistricts.min.geojson` | simplified ecodistrict polygons |
-| `client/data/ecodistricts.json` | per ecodistrict: names, label point, soil, crops by year |
-| `client/data/yield.json` | per ecodistrict: estimated yield (kg/ha) by crop and year, for 15 major field crops; per crop: resolution (`res`), last real year (`last`), dropped copied years (`dropped`), and single-crop repeats kept but flagged (`suspect`) |
-| `client/data/seeded.json` | per region series: hectares seeded by crop and year (12 crops); ecodistrict → region links as runs of years; province totals per crop and year |
-| `client/data/climate/<VAR>.bin` + `meta.json` | Int16 `[ecodistrict][month]` per climate variable, loaded when picked |
-| `client/data/similarity/<id>.bin` + `meta.json` | top 10 matches per month for one ecodistrict, loaded when picked |
-| `client/data/oni.json` | NOAA Oceanic Niño Index |
-| `client/data/oni_forecast.json` | forecast ONI seasons from ECMWF seasonal sea-surface temperature (`fetch_forecast.py`) |
-| `client/data/finance.json` | per province/year: direct payments by program, observed yield anomaly, growing-season weather anomaly, ENSO phase, and the $/yield-point sensitivity |
-| `client/data/irrigation.json` | irrigation volume (m³) by season period, for each province, each drainage basin, and Canada-by-crop, per survey year |
-| `client/data/drainage.min.geojson` | simplified StatCan drainage-basin polygons (13 units, feature id = basin key) for the basin geography |
-| `client/data/yield_forecast.json` | next-season outlook per crop and region: quantiles (2.5–97.5%) with and without El Niño weighting, normal year, chance below normal / of a ≥20% shortfall, warming scenarios, per-analog effects; hindcasts 2001–2025 per region; skill per crop (incl. `r2_weather`, the share of the swing the known summer explains); the weather model used (`weather_model`); ecodistrict → region; the ENSO input used |
+| `data/ecodistricts.min.geojson` | simplified ecodistrict polygons |
+| `data/ecodistricts.json` | per ecodistrict: names, label point, soil, crops by year |
+| `data/yield.json` | per ecodistrict: estimated yield (kg/ha) by crop and year, for 15 major field crops; per crop: resolution (`res`), last real year (`last`), dropped copied years (`dropped`), and single-crop repeats kept but flagged (`suspect`) |
+| `data/seeded.json` | per region series: hectares seeded by crop and year (12 crops); ecodistrict → region links as runs of years; province totals per crop and year |
+| `data/climate/<VAR>.bin` + `meta.json` | Int16 `[ecodistrict][month]` per climate variable, loaded when picked |
+| `data/similarity/<id>.bin` + `meta.json` | top 10 matches per month for one ecodistrict, loaded when picked |
+| `data/oni.json` | NOAA Oceanic Niño Index |
+| `data/oni_forecast.json` | forecast ONI seasons from ECMWF seasonal sea-surface temperature (`fetch_forecast.py`) |
+| `data/finance.json` | per province/year: direct payments by program, observed yield anomaly, growing-season weather anomaly, ENSO phase, and the $/yield-point sensitivity |
+| `data/irrigation.json` | irrigation volume (m³) by season period, for each province, each drainage basin, and Canada-by-crop, per survey year |
+| `data/drainage.min.geojson` | simplified StatCan drainage-basin polygons (13 units, feature id = basin key) for the basin geography |
+| `data/yield_forecast.json` | next-season outlook per crop and region: quantiles (2.5–97.5%) with and without El Niño weighting, normal year, chance below normal / of a ≥20% shortfall, warming scenarios, per-analog effects; hindcasts 2001–2025 per region; skill per crop (incl. `r2_weather`, the share of the swing the known summer explains); the weather model used (`weather_model`); ecodistrict → region; the ENSO input used |
 
-`client/data/enso_forecast.json` is a hand-maintained **input** to `build_yield_forecast.py`: NOAA CPC's RONI
+`data/enso_forecast.json` is a hand-maintained **input** to `build_yield_forecast.py`: NOAA CPC's RONI
 outlook (5/50/95 percentiles and strength probabilities per season). CPC updates it on the second
 Thursday of each month; copy the new numbers from the
 [outlook](https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/outlook/) and

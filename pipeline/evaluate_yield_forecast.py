@@ -3,7 +3,7 @@
 Usage:  python pipeline/evaluate_yield_forecast.py [--json out.json] [--from 1991]
           --from  first test year (default 2001). 1991 also tests the strong El Nino seasons 1992, 1995 and
                   1998, forecast from only 10-17 training years, so compare phases within one run
-Reads   the same inputs as build_yield_forecast.py, plus client/data/yield_forecast.json for the El Nino
+Reads   the same inputs as build_yield_forecast.py, plus data/yield_forecast.json for the El Nino
         weighting the build chose (enso.kernel_h, enso.lam). Run the build first.
 
 Test design: for every year t from HIND0 (2001) to the last year with yields, refit the model on the years

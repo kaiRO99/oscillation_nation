@@ -67,7 +67,7 @@ const state = {
   meta: null, eco: null, ids: [], rowOf: {}, bins: {}, normals: {}, domains: {},
   oni: [], enso: [], oniFc: [], classes: {},
   nObs: 0, nowT: null, kinds: [], // months < nObs are NASA POWER; later ones come from Meteomatics
-  simMeta: null, simCache: {}, sel: null, matches: [], hover: null,
+  simMeta: null, simCache: {}, sel: null, matches: [], shownMatches: new Set(), hover: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -617,7 +617,10 @@ const varDigits = (key) => (state.meta.vars[key].scale < 0.01 ? 2 : state.meta.v
 // ---------------------------------------------------------------------------
 // Painting
 // ---------------------------------------------------------------------------
-const mapReady = () => map.getSource('ed') && map.isSourceLoaded('ed');
+// Feature state can be set as soon as the source exists (MapLibre keeps it for tiles still loading).
+// Don't also require isSourceLoaded: it is briefly false during flyTo/zoom, and skipping updates then
+// left stale match highlights and unpainted months behind.
+const mapReady = () => !!map.getSource('ed');
 
 function paintAll() {
   paintClimate();
@@ -1389,8 +1392,11 @@ function ensoChip(t) {
 function renderSim() {
   const id = state.sel;
   const you = $('#sim-you'), res = $('#sim-results');
-  // clear old highlights
-  if (mapReady()) for (const m of state.matches) map.setFeatureState({ source: 'ed', id: m.id }, { match: null });
+  // clear old highlights: every id we actually highlighted, kept until it is really cleared
+  if (mapReady()) {
+    for (const mid of state.shownMatches) map.setFeatureState({ source: 'ed', id: mid }, { match: null });
+    state.shownMatches.clear();
+  }
   state.matches = [];
   if (id == null) {
     you.innerHTML = '';
@@ -1422,7 +1428,12 @@ function renderSim() {
     return;
   }
   state.matches = simMatches(id, state.t);
-  if (mapReady()) for (const m of state.matches) map.setFeatureState({ source: 'ed', id: m.id }, { match: m.score });
+  if (mapReady()) {
+    for (const m of state.matches) {
+      map.setFeatureState({ source: 'ed', id: m.id }, { match: m.score });
+      state.shownMatches.add(m.id);
+    }
+  }
   const head = isExt(state.t)
     ? `<h2>${isFuture(state.t) ? 'Forecast' : 'This month'} is most like ${infoHtml('Compared on what Meteomatics provides (temperature, precipitation, humidity, wind, sun, snow depth, frost days) plus soil; soil wetness and evapotranspiration are not forecast.')}</h2>`
     : `<h2>Most similar ${MONTHS[state.t % 12]}s</h2>`;
@@ -1610,6 +1621,10 @@ function buildUI() {
     if (state.hover != null) map.setFeatureState({ source: 'ed', id: state.hover }, { hover: false });
     state.hover = id;
     if (id != null) map.setFeatureState({ source: 'ed', id }, { hover: true });
+  });
+  results.addEventListener('mouseleave', () => {
+    if (state.hover != null && mapReady()) map.setFeatureState({ source: 'ed', id: state.hover }, { hover: false });
+    state.hover = null;
   });
   renderSim();
 }

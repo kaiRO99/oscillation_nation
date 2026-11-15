@@ -561,7 +561,8 @@ function paintClimate() {
   const colors = rampFor(key, mode);
   const v = state.meta.vars[key];
   $('#climate-ramp').innerHTML = rampHtml(colors, dom, mode === 'anom' ? `${v.units} vs normal` : v.units, Math.max(0, varDigits(key) - (mode === 'anom' ? 0 : 1)));
-  const note = $('#climate-note'); // always shown, fixed height, so the panel never jumps
+  const note = $('#climate-note');
+  $('#climate-info')?.classList.toggle('warn', isExt(state.t) && !v.forecast);
   if (isExt(state.t)) {
     note.innerHTML = !v.forecast
       ? `<b>No forecast for this variable.</b> NASA POWER has it up to ${tLabel(state.nObs - 1)}.`
@@ -708,8 +709,12 @@ function paintYield() {
   }
 }
 
+function syncLegends() {
+  for (const el of document.querySelectorAll('.legend[data-for]')) el.hidden = !$('#' + el.dataset.for).checked;
+}
+
 function applyLayers() {
-  for (const el of document.querySelectorAll('.opts')) el.hidden = !$('#' + el.dataset.for).checked;
+  syncLegends();
   if ($('#lyr-yield').checked) paintYield(); // legend + text even before the map is ready
   if (!map.getLayer('climate-fill')) return;
   const vis = (id, on) => map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
@@ -720,7 +725,6 @@ function applyLayers() {
   vis('lines', $('#lyr-lines').checked);
   if ($('#lyr-soil').checked) paintSoil();
   if ($('#lyr-yield').checked) paintYield();
-  for (const el of document.querySelectorAll('.opts')) el.hidden = !$('#' + el.dataset.for).checked;
 }
 
 // ---------------------------------------------------------------------------
@@ -844,7 +848,8 @@ function renderSim() {
   const s = snapshot(id, state.t);
   const c = cropRec(id);
   you.innerHTML = `<div class="you">
-    <div class="you-head"><b>Ecodistrict ${id}</b> in <b>${tLabel(state.t)}</b>${isFuture(state.t) ? ' <span class="fc-tag">forecast</span>' : ''} ${ensoChip(state.t)}</div>
+    <div class="you-head"><b>Ecodistrict ${id}</b> in <b>${tLabel(state.t)}</b>${isFuture(state.t) ? ' <span class="fc-tag">forecast</span>' : ''} ${ensoChip(state.t)}
+      ${infoHtml(`In brackets: difference from the ${NORMAL[0]}–${NORMAL[1]} normal for ${MONTHS[state.t % 12]}.`)}</div>
     <div class="muted">${esc(districtName(id))} · ${Number(r.area).toLocaleString()} km²</div>
     <dl>
       <dt>Mean temp</dt><dd>${fmt(s.temp)} °C <span class="muted">(${signed(s.tempA)})</span></dd>
@@ -853,7 +858,6 @@ function renderSim() {
       ${r.soil ? `<dt>Soil</dt><dd>${esc(state.eco.soil_orders[r.soil.order] ?? '–')}, ${fmt(r.soil.awhc, 0)} mm water holding</dd>` : ''}
       ${c && c.crop > 0 ? `<dt>Crops ${cropYear()}</dt><dd>${fmt(c.crop, 0)}% of land · mostly ${esc(state.classes[c.top]?.[0] ?? '–')}</dd>` : ''}
     </dl>
-    <div class="muted small">(in brackets: difference from the ${NORMAL[0]}–${NORMAL[1]} normal for ${MONTHS[state.t % 12]})</div>
   </div>`;
 
   if (!state.simMeta) {
@@ -867,9 +871,8 @@ function renderSim() {
   state.matches = simMatches(id, state.t);
   if (mapReady()) for (const m of state.matches) map.setFeatureState({ source: 'ed', id: m.id }, { match: m.score });
   const head = isExt(state.t)
-    ? `<h2>${isFuture(state.t) ? 'The forecast' : 'This month'} looks most like these past ${MONTHS[state.t % 12]}s</h2>` +
-      '<p class="small">Compared on what Meteomatics provides (temperature, precipitation, humidity, wind, sun, snow depth, frost days) plus soil; soil wetness and evapotranspiration are not forecast.</p>'
-    : `<h2>Most similar: ${MONTHS[state.t % 12]} in other years</h2>`;
+    ? `<h2>${isFuture(state.t) ? 'Forecast' : 'This month'} is most like ${infoHtml('Compared on what Meteomatics provides (temperature, precipitation, humidity, wind, sun, snow depth, frost days) plus soil; soil wetness and evapotranspiration are not forecast.')}</h2>`
+    : `<h2>Most similar ${MONTHS[state.t % 12]}s</h2>`;
   res.innerHTML = `${head}<ol class="matches">` + state.matches.map((m) => {
     const q = snapshot(m.id, m.t);
     return `<li data-id="${m.id}" data-t="${m.t}">
@@ -878,7 +881,48 @@ function renderSim() {
       <div class="muted">Ecodistrict ${m.id} · ${esc(districtName(m.id))}</div>
       <div class="m-vals">${fmt(q.temp)} °C · ${fmt(q.precip, 0)} mm · wetness ${fmt(q.wet, 2)}</div>
     </li>`;
-  }).join('') + '</ol><p class="small">Click a match to zoom to it. Double-click to also jump the timeline to that month.</p>';
+  }).join('') + '</ol>';
+}
+
+// ---------------------------------------------------------------------------
+// Info icons: hover, focus or tap shows the hidden text in one floating popover
+// ---------------------------------------------------------------------------
+const infoHtml = (html) => `<span class="info" tabindex="0" role="button" aria-label="More info">i<span class="info-src">${html}</span></span>`;
+
+function buildInfo() {
+  const pop = document.createElement('div');
+  pop.id = 'info-pop';
+  pop.hidden = true;
+  document.body.appendChild(pop);
+  let cur = null, pinned = false, hideT = null;
+  const show = (el) => {
+    clearTimeout(hideT);
+    cur = el;
+    pop.innerHTML = el.querySelector('.info-src').innerHTML;
+    pop.hidden = false;
+    const b = el.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+    const x = Math.max(8, Math.min(innerWidth - w - 8, b.left + b.width / 2 - w / 2));
+    const y = b.bottom + 8 + h > innerHeight ? b.top - h - 8 : b.bottom + 8;
+    pop.style.left = `${x}px`;
+    pop.style.top = `${y}px`;
+    document.querySelectorAll('.info.open').forEach((e) => e.classList.remove('open'));
+    el.classList.add('open');
+  };
+  const hide = () => { pop.hidden = true; pinned = false; cur?.classList.remove('open'); cur = null; };
+  const later = () => { if (!pinned) hideT = setTimeout(hide, 150); };
+  document.addEventListener('mouseover', (e) => {
+    const el = e.target.closest('.info');
+    if (el && el !== cur) { pinned = false; show(el); } else if (!el && !e.target.closest('#info-pop') && cur) later();
+    else if (e.target.closest('#info-pop')) clearTimeout(hideT);
+  });
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest('.info');
+    if (el) { e.preventDefault(); e.stopPropagation(); if (cur === el && pinned) hide(); else { show(el); pinned = true; } }
+    else if (!e.target.closest('#info-pop')) hide();
+  }, true);
+  document.addEventListener('focusin', (e) => { const el = e.target.closest?.('.info'); if (el) show(el); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hide(); });
+  document.addEventListener('scroll', hide, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -940,7 +984,15 @@ function buildUI() {
   for (const id of ['lyr-climate', 'lyr-soil', 'lyr-crops', 'lyr-yield', 'lyr-lines']) {
     $('#' + id).addEventListener('change', () => { applyLayers(); if (id === 'lyr-crops') paintCrops(); });
   }
-  for (const el of document.querySelectorAll('.opts')) el.hidden = !$('#' + el.dataset.for).checked;
+  syncLegends();
+  for (const b of document.querySelectorAll('.expand')) {
+    b.addEventListener('click', () => {
+      const open = b.getAttribute('aria-expanded') !== 'true';
+      b.setAttribute('aria-expanded', open);
+      $('#' + b.getAttribute('aria-controls')).hidden = !open;
+    });
+  }
+  buildInfo();
 
   for (const b of document.querySelectorAll('.collapse')) {
     b.onclick = () => {

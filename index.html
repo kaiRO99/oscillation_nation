@@ -6,7 +6,7 @@
 <title>Oscillation Nation · El Niño and Canadian farmland</title>
 <link href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css" rel="stylesheet">
 <!-- Porkbun caches .css/.js for 30 days: bump ?v= on every deploy that changes them -->
-<link href="style.css?v=20" rel="stylesheet">
+<link href="style.css?v=22" rel="stylesheet">
 </head>
 <body>
 <div id="map"></div>
@@ -29,6 +29,8 @@
       <input id="month" type="range" min="0" max="0" step="1" value="0" aria-label="Month">
       <div class="ticks"><span id="tmin"></span><span id="thover" class="hover-label"></span><span id="tmax"></span></div>
 
+      <svg id="tape-fine" class="tape" viewBox="0 0 360 46" aria-label="Timeline, 3 years around the selected month"></svg>
+
       <div class="step-row">
         <button class="step" data-step="-12" title="Back one year (Shift + ←)" aria-label="Back one year">«</button>
         <button class="step" data-step="-1" title="Back one month (←)" aria-label="Back one month">‹</button>
@@ -39,83 +41,83 @@
         <button id="go-now" class="step wide" title="Jump to this month">Now</button>
       </div>
 
-      <div class="tapes">
-        <div class="tape-head"><span>3 years around the selected month</span><span class="muted">drag · click · scroll</span></div>
-        <svg id="tape-fine" class="tape" viewBox="0 0 360 46" aria-label="Timeline, 3 years around the selected month"></svg>
-      </div>
       <div class="legend-row">
         <span><i class="sw nino"></i>El Niño</span><span><i class="sw neutral"></i>Neutral</span><span><i class="sw nina"></i>La Niña</span>
+        <span class="info" tabindex="0" role="button" aria-label="More info">i<span class="info-src"><span id="oni-text"></span><br><br><b>Moving through time:</b> drag or click the big chart for any year; drag, click or scroll the small strip (3 years around the selected month) for single months; ‹ › step a month, « » a year (or ← → and Shift + ← →).</span></span>
       </div>
-      <p id="oni-text" class="small"></p>
     </section>
 
-    <section>
-      <h2>Datasets</h2>
-
+    <section class="datasets">
+      <h2>Datasets <span class="info" tabindex="0" role="button" aria-label="More info">i<span class="info-src">Ecodistricts: AAFC National Ecological Framework v2.2.
+      Soil: AAFC <a href="https://sis.agr.gc.ca/cansis/nsdb/slc/v3.2/index.html" target="_blank" rel="noopener">Soil Landscapes of Canada v3.2</a>.
+      Crops: <a href="https://agriculture.canada.ca/imagery-images/rest/services/annual_crop_inventory" target="_blank" rel="noopener">AAFC Annual Crop Inventory</a>; yields: AAFC historical estimated crop yield by Soil Landscape polygon.
+      All under the <a href="https://open.canada.ca/en/open-government-licence-canada" target="_blank" rel="noopener">Open Government Licence – Canada</a>.
+      Climate: <a href="https://power.larc.nasa.gov/" target="_blank" rel="noopener">NASA POWER</a>; recent months and the seasonal forecast (ECMWF) from <a href="https://www.meteomatics.com/" target="_blank" rel="noopener">Meteomatics</a>.
+      ENSO: <a href="https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php" target="_blank" rel="noopener">NOAA CPC ONI</a>; forecast ONI from ECMWF Niño 3.4 sea temperature (Meteomatics).
+      Every dataset is averaged per ecodistrict.</span></span></h2>
       <div class="layer">
-        <label class="check"><input id="lyr-climate" type="checkbox" checked> <b>NASA POWER climate</b></label>
-        <div class="opts" data-for="lyr-climate">
+        <div class="layer-head">
+          <label class="check"><input id="lyr-climate" type="checkbox" checked> Climate</label>
+          <span class="info" id="climate-info" tabindex="0" role="button" aria-label="More info">i<span class="info-src"><span id="climate-note"></span></span></span>
+          <button class="expand" aria-expanded="false" aria-controls="climate-opts" title="Options"><span aria-hidden="true">▾</span></button>
+        </div>
+        <div class="opts" id="climate-opts" hidden>
           <select id="climate-var" aria-label="Climate variable"></select>
           <select id="climate-mode" aria-label="Show">
             <option value="value">Monthly value</option>
             <option value="anom">Difference from 1991–2020 normal</option>
           </select>
-          <div class="ramp" id="climate-ramp"></div>
-          <p class="small note" id="climate-note"></p>
         </div>
+        <div class="ramp legend" id="climate-ramp" data-for="lyr-climate"></div>
       </div>
-
       <div class="layer">
-        <label class="check"><input id="lyr-soil" type="checkbox"> <b>Soil</b> <span class="muted">(farmland only)</span></label>
-        <div class="opts" data-for="lyr-soil">
+        <div class="layer-head">
+          <label class="check"><input id="lyr-soil" type="checkbox"> Soil</label>
+          <span class="info" tabindex="0" role="button" aria-label="More info">i<span class="info-src">Soil Landscapes of Canada v3.2, averaged per ecodistrict. Only farmland has detailed soil survey data.</span></span>
+          <button class="expand" aria-expanded="false" aria-controls="soil-opts" title="Options"><span aria-hidden="true">▾</span></button>
+        </div>
+        <div class="opts" id="soil-opts" hidden>
           <select id="soil-var" aria-label="Soil property"></select>
-          <div class="ramp" id="soil-ramp"></div>
         </div>
+        <div class="ramp legend" id="soil-ramp" data-for="lyr-soil"></div>
       </div>
-
       <div class="layer">
-        <label class="check"><input id="lyr-crops" type="checkbox"> <b>AAFC crops planted</b></label>
-        <div class="opts" data-for="lyr-crops">
-          <p class="small" id="crops-text"></p>
-          <div id="crop-legend" class="cats"></div>
+        <div class="layer-head">
+          <label class="check"><input id="lyr-crops" type="checkbox"> Crops planted</label>
+          <span class="info" tabindex="0" role="button" aria-label="More info">i<span class="info-src"><span id="crops-text"></span></span></span>
+          <span class="expand-pad"></span>
         </div>
+        <div id="crop-legend" class="cats legend" data-for="lyr-crops"></div>
       </div>
-
       <div class="layer">
-        <label class="check"><input id="lyr-yield" type="checkbox"> <b>Crop yield</b></label>
-        <div class="opts" data-for="lyr-yield">
+        <div class="layer-head">
+          <label class="check"><input id="lyr-yield" type="checkbox"> Crop yield</label>
+          <span class="info" tabindex="0" role="button" aria-label="More info">i<span class="info-src"><span id="yield-text"></span></span></span>
+          <button class="expand" aria-expanded="false" aria-controls="yield-opts" title="Options"><span aria-hidden="true">▾</span></button>
+        </div>
+        <div class="opts" id="yield-opts" hidden>
           <select id="yield-crop" aria-label="Crop"></select>
           <select id="yield-mode" aria-label="Show">
             <option value="value">Yield (kg/ha)</option>
             <option value="anom">Difference from average</option>
           </select>
-          <div class="ramp" id="yield-ramp"></div>
-          <p class="small" id="yield-text"></p>
+        </div>
+        <div class="ramp legend" id="yield-ramp" data-for="lyr-yield"></div>
+      </div>
+      <div class="layer">
+        <div class="layer-head">
+          <label class="check"><input id="lyr-lines" type="checkbox" checked> Boundaries</label>
+          
+          <span class="expand-pad"></span>
         </div>
       </div>
-
-      <div class="layer">
-        <label class="check"><input id="lyr-lines" type="checkbox" checked> <b>Ecodistrict boundaries</b></label>
-      </div>
     </section>
-
-    <p class="src">
-      Ecodistricts: AAFC National Ecological Framework v2.2.
-      Soil: AAFC <a href="https://sis.agr.gc.ca/cansis/nsdb/slc/v3.2/index.html" target="_blank" rel="noopener">Soil Landscapes of Canada v3.2</a>.
-      Crops: <a href="https://agriculture.canada.ca/imagery-images/rest/services/annual_crop_inventory" target="_blank" rel="noopener">AAFC Annual Crop Inventory</a>; yields: AAFC historical estimated crop yield by Soil Landscape polygon.
-      All under the <a href="https://open.canada.ca/en/open-government-licence-canada" target="_blank" rel="noopener">Open Government Licence – Canada</a>.
-      Climate: <a href="https://power.larc.nasa.gov/" target="_blank" rel="noopener">NASA POWER</a>; recent months and the
-      seasonal forecast (ECMWF) from <a href="https://www.meteomatics.com/" target="_blank" rel="noopener">Meteomatics</a>.
-      ENSO: <a href="https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php" target="_blank" rel="noopener">NOAA CPC ONI</a>;
-      forecast ONI from ECMWF Niño 3.4 sea temperature (Meteomatics).
-      Every dataset is averaged per ecodistrict.
-    </p>
   </div>
 </aside>
 
 <aside id="sim" class="card">
   <header>
-    <h1>Places like yours</h1>
+    <h1>Places like yours <span class="info" tabindex="0" role="button" aria-label="More info">i<span class="info-src">Compares every climate variable for the month, plus soil, with every other farmland ecodistrict in the same calendar month of other years. Forecast months are matched against past (observed) months, so you can see which places already lived through the conditions forecast for yours. 100 = identical; a random pair scores about 2.<br><br>Click a match to zoom to it; double-click to also jump the timeline to that month.</span></span></h1>
     <button class="collapse" data-target="sim" aria-label="Collapse panel">–</button>
   </header>
   <div class="body">
@@ -126,17 +128,12 @@
     </label>
     <div id="sim-you"></div>
     <div id="sim-results"></div>
-    <p class="small" id="sim-note">
-      Compares every climate variable for the month and the soil with every other farmland ecodistrict in the same
-      calendar month of other years. Forecast months are matched against past (observed) months, so you can see
-      which places already lived through the conditions forecast for yours. 100 = identical; a random pair scores about 2.
-    </p>
   </div>
 </aside>
 
 <div id="tip" hidden></div>
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-<script src="app.js?v=20"></script>
+<script src="app.js?v=22"></script>
 </body>
 </html>

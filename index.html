@@ -6,7 +6,7 @@
 <title>Oscillation Nation · El Niño and Canadian farmland</title>
 <link href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css" rel="stylesheet">
 <!-- Porkbun caches .css/.js for 30 days: bump ?v= on every deploy that changes them -->
-<link href="style.css?v=11" rel="stylesheet">
+<link href="style.css?v=16" rel="stylesheet">
 </head>
 <body>
 <div id="map"></div>
@@ -71,9 +71,54 @@
           <select id="yield-mode" aria-label="Show">
             <option value="value">Yield (kg/ha)</option>
             <option value="anom">Difference from average</option>
+            <option value="biv">Seeded area vs result</option>
           </select>
           <div class="ramp" id="yield-ramp"></div>
           <p class="small" id="yield-text"></p>
+        </div>
+      </div>
+
+      <div class="layer">
+        <label class="check"><input id="lyr-seeded" type="checkbox"> <b>Seeded area</b> <span class="muted">(by region)</span></label>
+        <div class="opts" data-for="lyr-seeded">
+          <select id="seeded-crop" aria-label="Crop"></select>
+          <div class="ramp" id="seeded-ramp"></div>
+          <p class="small" id="seeded-text"></p>
+        </div>
+      </div>
+
+      <div class="layer">
+        <label class="check"><input id="lyr-finance" type="checkbox"> <b>Farm support payments</b> <span class="muted">(by province)</span></label>
+        <div class="opts" data-for="lyr-finance">
+          <select id="finance-metric" aria-label="Payment type"></select>
+          <div class="ramp" id="finance-ramp"></div>
+          <p class="small" id="finance-text"></p>
+        </div>
+      </div>
+
+      <div class="layer">
+        <label class="check"><input id="lyr-irrigation" type="checkbox"> <b>Irrigation water use</b> <span class="muted">(province or basin)</span></label>
+        <div class="opts" data-for="lyr-irrigation">
+          <select id="irrigation-geo" aria-label="Irrigation geography">
+            <option value="basin">By drainage basin (finer)</option>
+            <option value="prov">By province</option>
+          </select>
+          <select id="irrigation-mode" aria-label="Show">
+            <option value="value">Volume (m³)</option>
+            <option value="anom">Difference from average</option>
+          </select>
+          <select id="irrigation-period" aria-label="Irrigation season">
+            <option value="auto">Season matches the timeline</option>
+            <option value="total">Full season (annual total)</option>
+            <option value="AM">April–May</option>
+            <option value="Jun">June</option>
+            <option value="Jul">July</option>
+            <option value="Aug">August</option>
+            <option value="SO">September–October</option>
+          </select>
+          <div class="ramp" id="irrigation-ramp"></div>
+          <div id="irrigation-crops"></div>
+          <p class="small" id="irrigation-text"></p>
         </div>
       </div>
 
@@ -89,6 +134,9 @@
       All under the <a href="https://open.canada.ca/en/open-government-licence-canada" target="_blank" rel="noopener">Open Government Licence – Canada</a>.
       Climate: <a href="https://power.larc.nasa.gov/" target="_blank" rel="noopener">NASA POWER</a>.
       ENSO: <a href="https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/ensostuff/ONI_v5.php" target="_blank" rel="noopener">NOAA CPC ONI</a>.
+      Farm support payments: <a href="https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3210009801" target="_blank" rel="noopener">Statistics Canada, Direct payments and rebates</a> (province-level, annual).
+      Seeded area: <a href="https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3210000201" target="_blank" rel="noopener">Statistics Canada, Estimated areas of principal field crops by Small Area Data Region</a> (Census Agricultural Regions, annual).
+      Irrigation water use: <a href="https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3810003701" target="_blank" rel="noopener">Statistics Canada, irrigation volume by province and crop type</a> (surveyed every second year), mapped by province or by <a href="https://open.canada.ca/data/en/dataset/b1c2dffa-c2ba-4d0e-b803-a483eef0f579" target="_blank" rel="noopener">StatCan drainage region</a> (watershed basin).
       Every dataset is averaged per ecodistrict.
     </p>
   </div>
@@ -117,6 +165,6 @@
 <div id="tip" hidden></div>
 
 <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-<script src="app.js?v=11"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>

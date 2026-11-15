@@ -23,6 +23,7 @@ As El Niño years come and go, the bubbles shift to show which places your locat
   - *Soil* – water holding capacity, texture, organic carbon, pH, drainage and dominant soil order from the Soil Landscapes of Canada (farmland only).
   - *AAFC crops planted* – bubbles sized by the share of land in crops for the slider's year, coloured by the largest crop group.
   - *Crop yield* – estimated yield (kg/ha) per ecodistrict for the slider's year, for 15 major field crops, shown as the raw value *or* as the % above/below that ecodistrict's own long-term average.
+  - *Irrigation water use* – cubic metres of irrigation water applied, for the growing-season period the slider's month falls in, mapped either **by province** or **by drainage basin** (a finer, sub-provincial watershed cut — e.g. isolating the South Saskatchewan). Shown as the raw volume *or* as the % above/below each area's own survey-period average for that season. Surveyed every second year, 2010–2024. A Canada-wide split of that water by crop type rides along in the panel.
   - *Ecodistrict boundaries.*
 - **Places like yours** (right panel). Pick your ecodistrict (type it or click the map). For the slider's month it lists the 10 ecodistricts whose conditions in the same calendar month of another year were most similar, using every climate variable plus soil, and highlights them on the map.
 
@@ -65,7 +66,7 @@ Everything a user can currently see or select, grouped by map layer. This is the
 - [x] Share of land in crops for the slider's year (bubble size)
 - [x] Largest crop group for that year (bubble colour)
 
-**Crop yield** (`lyr-yield`) — estimated yield per ecodistrict (kg/ha), averaged across the Soil Landscape polygons, for the slider's year. Shown as the raw value *or* the % difference from that ecodistrict's own long-term average. 15 major field crops:
+**Crop yield** (`lyr-yield`) — estimated yield per ecodistrict (kg/ha), averaged across the Soil Landscape polygons, for the slider's year. Three views: the raw value; the % difference from that ecodistrict's own long-term average; or **Seeded area vs result** — a bivariate map crossing how much was seeded in the region (pale → saturated) with yield vs the ecodistrict's own average (red below, green above), so you can spot where a lot was planted but it yielded poorly, and the reverse. 15 major field crops:
 - [x] Spring wheat (`WHTSPG`), Durum wheat (`WHTDUR`), Winter wheat (`WHTWINT`)
 - [x] Barley (`BARLEY`), Oats (`OATS`)
 - [x] Canola (`CANOLA`), Flaxseed (`FLAXSD`), Sunflower seed (`SUNFLS`)
@@ -73,6 +74,17 @@ Everything a user can currently see or select, grouped by map layer. This is the
 - [x] Dry peas (`DFPEAS`), Lentils (`LENTIL`)
 - [x] Potatoes (`POTATS`)
 - [x] Hay & fodder (`OHAYFD`), Alfalfa (`ALFALFA`)
+
+**Financial effect of weather** (`lyr-finance`, province-level) — what the weather cost, from StatCan direct payments to producers joined to observed yields and growing-season weather. Province-year, 2007–2025:
+- [x] Crop Insurance gross payments (`crop_ins`, $k nominal)
+- [x] Private hail insurance (`hail`), AgriRecovery (`agrirecovery`), Crop Loss Compensation (`crop_loss`)
+- [x] All weather-driven programs combined (`weather_prog` = the four above)
+- [x] AgriStability (`agristability`) and Provincial Stabilization (`prov_stab`), for contrast — margin-based, they do *not* track yield
+- [x] Total direct payments (`total`)
+- [x] Two-year claim window (`*_2y` = calendar year *t* + *t+1*), because crop-year claims are largely paid the following calendar year
+- [x] Payment anomaly (`*_anom`, % vs that province's own log-linear trend — strips inflation and the growth in insured liability)
+- [x] Observed yield anomaly (`yield_pct`, % vs trend, from Census Agricultural Region yields)
+- [x] Dollar sensitivity per province (`sensitivity_m_per_yield_point`): $M of weather-program payments per percentage point of yield shortfall
 
 **Base layer**
 - [x] Ecodistrict boundaries (`lyr-lines`)
@@ -90,6 +102,9 @@ python scripts/fetch_crops.py           # AAFC crop inventory per ecodistrict an
 python scripts/build_client_data.py     # merges boundaries, soil and crops -> data/ecodistricts.json
 python scripts/build_yield.py           # SLC crop-yield CSV -> data/yield.json (per ecodistrict/year/crop)
 python scripts/similarity.py            # precomputed matches -> data/similarity/<id>.bin (needs numpy)
+python scripts/build_finance.py         # payments + yields + weather -> data/finance.json
+bash   scripts/build_drainage.sh        # StatCan drainage regions -> data/drainage.min.geojson (needs npx mapshaper)
+python scripts/build_irrigation.py      # StatCan irrigation volume by province + basin + crop -> data/irrigation.json
 ```
 
 | File sent to the browser | What it holds |
@@ -100,5 +115,26 @@ python scripts/similarity.py            # precomputed matches -> data/similarity
 | `data/climate/<VAR>.bin` + `meta.json` | Int16 `[ecodistrict][month]` per climate variable, loaded when picked |
 | `data/similarity/<id>.bin` + `meta.json` | top 10 matches per month for one ecodistrict, loaded when picked |
 | `data/oni.json` | NOAA Oceanic Niño Index |
+| `data/finance.json` | per province/year: direct payments by program, observed yield anomaly, growing-season weather anomaly, ENSO phase, and the $/yield-point sensitivity |
+| `data/irrigation.json` | irrigation volume (m³) by season period, for each province, each drainage basin, and Canada-by-crop, per survey year |
+| `data/drainage.min.geojson` | simplified StatCan drainage-basin polygons (13 units, feature id = basin key) for the basin geography |
+
+`build_finance.py` additionally needs two files in `data/`: `financials.csv` (StatCan
+32-10-0106, all geographies, long format) and `historical_actual_crop_yield_by_CAR.csv`
+(observed yields by Census Agricultural Region).
+
+### Data quality notes
+
+- **`data/historicalEstimatedCropYieldSlc.csv`: the 2024 rows are a copy of 2021.** Spring
+  wheat, durum, peas, lentils, hay, soybeans, grain corn and potatoes are identical to
+  2021 for all 3,390 soil-landscape polygons, and barley/oats/canola for ~56% of them;
+  every other adjacent year pair shares 0%. Exclude 2024 from anything built on this file
+  until it is re-pulled. `build_yield.py` should filter it out of `yield.json` too.
+- These are *estimated* (modelled) yields. The money layer therefore uses the **observed**
+  CAR yields instead, so that weather → yield → payment is not partly circular.
+- **`farmcashreceipts.csv` stops at 2015 Q1**, so it cannot normalise payments across the
+  2007–2025 window. Re-pull it if you want payments as a share of farm receipts.
+- Payments are **nominal** dollars. `*_anom` fields handle this by detrending in logs;
+  if you want real dollars, add a CPI series rather than comparing levels across years.
 
 **Similarity method (kept simple for now).** Each ecodistrict-month is a vector of the 15 climate values plus 5 soil properties, z-scored (climate within each calendar month) and weighted (weights in `scripts/similarity.py`). Candidates are the same calendar month in a *different* year, in another ecodistrict; each ecodistrict's best year is kept. Score = 100·exp(−2d²/Σw): 100 is identical and a random pair scores about 2. Only farmland ecodistricts (those with soil survey data) are included.
